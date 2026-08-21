@@ -1,5 +1,6 @@
 /** Native profile editor with URL-only MCP setup and automatic OAuth discovery. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProfileStore, ProfileView } from './store.ts'
 import type { ApiCapability } from './api.ts'
 import styles from './ProfilesSettings.module.css'
@@ -25,15 +26,14 @@ export function ProfilesSettings({ store, close }: ProfilesSettingsProps): React
     <section aria-label="Company Profiles" className={styles.section}>
       <div className={styles.header}>
         <h2 className={styles.heading}>Company Profiles</h2>
-        <button
-          type="button"
-          className={styles.btnPrimary}
+        <Button
+          variant="primary"
           onClick={() => {
             void store.create({ displayName: 'New Profile' })
           }}
         >
           + New Profile
-        </button>
+        </Button>
       </div>
       <ul className={styles.list} role="list">
         {profiles.map(p => (
@@ -81,26 +81,25 @@ function ProfileRow({ profile, store, isDefault }: { profile: ProfileView; store
         )}
       </div>
       <div className={styles.rowActions}>
-        <button type="button" className={styles.btn} onClick={() => store.setEditing(profile.id)} aria-label={`Edit ${profile.name}`}>
+        <Button size="sm" onClick={() => store.setEditing(profile.id)} aria-label={`Edit ${profile.name}`}>
           Edit
-        </button>
-        <button type="button" className={styles.btn} onClick={() => { void store.clone(profile.id) }} aria-label={`Clone ${profile.name}`}>
+        </Button>
+        <Button size="sm" onClick={() => { void store.clone(profile.id) }} aria-label={`Clone ${profile.name}`}>
           Clone
-        </button>
+        </Button>
         {!isDefault && (
-          <button
-            type="button"
-            className={styles.btn}
+          <Button
+            size="sm"
             onClick={() => { void store.archive(profile.id, !profile.archived) }}
             aria-label={profile.archived ? `Unarchive ${profile.name}` : `Archive ${profile.name}`}
           >
             {profile.archived ? 'Unarchive' : 'Archive'}
-          </button>
+          </Button>
         )}
         {!isDefault && !profile.archived && (
-          <button
-            type="button"
-            className={styles.btnDanger}
+          <Button
+            size="sm"
+            className={styles.danger}
             onClick={() => {
               if (confirm(`Delete profile "${profile.name}"? This cannot be undone.`)) {
                 void store.remove(profile.id)
@@ -109,7 +108,7 @@ function ProfileRow({ profile, store, isDefault }: { profile: ProfileView; store
             aria-label={`Delete ${profile.name}`}
           >
             Delete
-          </button>
+          </Button>
         )}
       </div>
     </li>
@@ -205,18 +204,18 @@ function ProfileEditor({ profile, store }: { profile: ProfileView; store: Profil
     <section aria-label={`Edit ${profile.name}`} className={styles.section}>
       <div className={styles.header}>
         <h2 className={styles.heading}>Edit: {profile.name}</h2>
-        <button type="button" className={styles.btn} onClick={() => store.setEditing(null)}>← Back</button>
+        <Button variant="outline" onClick={() => store.setEditing(null)}>← Back</Button>
       </div>
       {validationError && <div role="alert" className={styles.alert}>{validationError}</div>}
 
       <fieldset className={styles.fieldset}>
         <legend className={styles.legend}>Profile Fields</legend>
         <div className={styles.fieldGrid}>
-          <label className={styles.label}>Display Name *<input className={styles.field} value={fields.displayName} onChange={event => setFields(value => ({ ...value, displayName: event.target.value }))} required /></label>
-          <label className={styles.label}>Legal Name<input className={styles.field} value={fields.legalName} onChange={event => setFields(value => ({ ...value, legalName: event.target.value }))} /></label>
+          <label className={styles.label}>Display Name *<Input value={fields.displayName} onChange={event => setFields(value => ({ ...value, displayName: event.target.value }))} required /></label>
+          <label className={styles.label}>Legal Name<Input value={fields.legalName} onChange={event => setFields(value => ({ ...value, legalName: event.target.value }))} /></label>
           <label className={`${styles.label} ${styles.fieldFull}`}>Description<textarea className={styles.textarea} value={fields.description} onChange={event => setFields(value => ({ ...value, description: event.target.value }))} /></label>
-          <label className={styles.label}>Website<input className={styles.field} type="url" value={fields.website} onChange={event => setFields(value => ({ ...value, website: event.target.value }))} placeholder="https://" /></label>
-          <label className={styles.label}>Color<span className={styles.colorRow}><input type="color" value={fields.color} onChange={event => setFields(value => ({ ...value, color: event.target.value }))} className={styles.colorSwatch} /><input className={styles.colorField} value={fields.color} onChange={event => setFields(value => ({ ...value, color: event.target.value }))} pattern="#[0-9a-fA-F]{6}" /></span></label>
+          <label className={styles.label}>Website<Input type="url" value={fields.website} onChange={event => setFields(value => ({ ...value, website: event.target.value }))} placeholder="https://" /></label>
+          <label className={styles.label}>Color<span className={styles.colorRow}><input type="color" value={fields.color} onChange={event => setFields(value => ({ ...value, color: event.target.value }))} className={styles.colorSwatch} /><Input className={styles.colorField!} value={fields.color} onChange={event => setFields(value => ({ ...value, color: event.target.value }))} pattern="#[0-9a-fA-F]{6}" /></span></label>
         </div>
       </fieldset>
 
@@ -235,24 +234,24 @@ function ProfileEditor({ profile, store }: { profile: ProfileView; store: Profil
                 <div className={styles.mcpUrl}>{config?.url ?? 'Local stdio server'}</div>
               </div>
               <div className={styles.rowActions}>
-                {status?.status === 'oauth-required' && <button type="button" className={styles.btnPrimary} onClick={() => { void store.connectOAuth(profile.id, serverId) }} aria-label={`Connect ${capability.key}; opens authorization page`}>Connect</button>}
-                {config?.url && <button type="button" className={styles.btn} onClick={() => setDraft({ originalKey: capability.key, name: capability.key, url: config.url! })}>Edit</button>}
-                <button type="button" className={styles.btnDanger} onClick={() => { void removeServer(capability) }}>Remove</button>
+                {status?.status === 'oauth-required' && <Button variant="primary" size="sm" onClick={() => { void store.connectOAuth(profile.id, serverId) }} aria-label={`Connect ${capability.key}; opens authorization page`}>Connect</Button>}
+                {config?.url && <Button size="sm" onClick={() => setDraft({ originalKey: capability.key, name: capability.key, url: config.url! })}>Edit</Button>}
+                <Button size="sm" className={styles.danger} onClick={() => { void removeServer(capability) }}>Remove</Button>
               </div>
             </li>
           })}
           {draft !== null && <li className={styles.mcpForm}>
-            <label className={styles.label}>Server name<input autoFocus className={styles.field} value={draft.name} onChange={event => setDraft(value => value && ({ ...value, name: event.target.value }))} placeholder="e.g. Jira" /></label>
-            <label className={styles.label}>Server URL<input className={styles.field} type="url" value={draft.url} onChange={event => setDraft(value => value && ({ ...value, url: event.target.value }))} placeholder="https://mcp.example.com" /></label>
-            <div className={styles.formActions}><button type="button" className={styles.btn} onClick={() => setDraft(null)}>Cancel</button><button type="button" className={styles.btnPrimary} disabled={saving} onClick={() => { void saveServer() }}>{saving ? 'Saving…' : 'Save server'}</button></div>
+            <label className={styles.label}>Server name<Input autoFocus value={draft.name} onChange={event => setDraft(value => value && ({ ...value, name: event.target.value }))} placeholder="e.g. Jira" /></label>
+            <label className={styles.label}>Server URL<Input type="url" value={draft.url} onChange={event => setDraft(value => value && ({ ...value, url: event.target.value }))} placeholder="https://mcp.example.com" /></label>
+            <div className={styles.formActions}><Button variant="outline" onClick={() => setDraft(null)}>Cancel</Button><Button variant="primary" disabled={saving} onClick={() => { void saveServer() }}>{saving ? 'Saving…' : 'Save server'}</Button></div>
           </li>}
         </ul>
-        {draft === null && <button type="button" className={styles.btn} onClick={() => setDraft({ name: '', url: '' })}>+ Add MCP Server</button>}
+        {draft === null && <Button variant="outline" onClick={() => setDraft({ name: '', url: '' })}>+ Add MCP Server</Button>}
       </fieldset>
 
       <div className={styles.actions}>
-        <button type="button" className={styles.btn} onClick={() => store.setEditing(null)}>Cancel</button>
-        <button type="button" className={styles.btnPrimary} onClick={() => { void handleSave() }} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+        <Button variant="outline" onClick={() => store.setEditing(null)}>Cancel</Button>
+        <Button variant="primary" onClick={() => { void handleSave() }} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
       </div>
     </section>
   )
