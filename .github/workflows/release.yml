@@ -34,7 +34,7 @@ jobs:
       - run: sha256sum *.tgz > SHA256SUMS
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             *.tgz
