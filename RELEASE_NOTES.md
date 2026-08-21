@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.0.1 — Production Release
+## 1.0.0 — Production Release
 
 Production multi-profile workspaces for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), shipped as one Cordis 4 Host/client bundle.
 
