@@ -12,10 +12,34 @@
     "./oauth": { "types": "./lib/oauth.d.ts", "default": "./lib/oauth.js" },
     "./runtime": { "types": "./lib/runtime.d.ts", "default": "./lib/runtime.js" },
     "./attention": { "types": "./lib/attention.d.ts", "default": "./lib/attention.js" },
+    "./mcp-manager": { "types": "./lib/mcp-manager.d.ts", "default": "./lib/mcp-manager.js" },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": ["lib", "cordis.patch.yml", "README.md"],
+  "files": ["lib", "cordis.patch.yml", "README.md", "LICENSE", "CHANGELOG.md"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deepseek-ai/plugins.git",
+    "directory": "dsh-profile-plugin"
+  },
+  "homepage": "https://github.com/deepseek-ai/plugins/tree/main/dsh-profile-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/deepseek-ai/plugins/issues"
+  },
+  "keywords": [
+    "deepseek",
+    "dsh",
+    "harness",
+    "cordis",
+    "company-profiles",
+    "multi-tenant",
+    "oauth",
+    "mcp"
+  ],
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/deepseek-ai"
+  },
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" }, "client": { "platform": "web" } },
   "scripts": { "build": "tsc -p tsconfig.json", "test": "node --import tsx --test tests/*.test.ts", "prepack": "pnpm build" },
   "engines": { "node": "^22.19.0 || >=24.0.0" },
