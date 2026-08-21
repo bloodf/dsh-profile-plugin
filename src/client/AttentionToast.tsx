@@ -1,5 +1,6 @@
 /** Shell overlay: attention toast with optional sound and click navigation. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Button, IconCloseOutline16, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './AttentionToast.module.css'
 import type { ProfileStore, ToastMessage } from './store.ts'
 
@@ -80,16 +81,16 @@ export function AttentionToastLayer({ store }: AttentionToastLayerProps): React.
 
   return (
     <div role="log" aria-label="Profile attention notifications" aria-live="polite" className={css.layer}>
-      {!soundEnabled && <button type="button" onClick={() => store.enableSound()} className={css.sound}>Enable notification sound</button>}
+      {!soundEnabled && <Button variant="outline" size="sm" onClick={() => store.enableSound()} className={css.sound}>Enable notification sound</Button>}
       {toasts.map(toast => (
         <div key={toast.id} role="alert" onClick={() => handleClick(toast)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') handleClick(toast) }} tabIndex={0} className={css.toast} style={{ '--profile-color': toast.profileColor } as React.CSSProperties}>
-          <span className={css.dot} />
+          <StateDot state="warning" />
           <div className={css.body}>
             <div className={css.profile}>{toast.profileName}</div>
             <div className={css.message}>{toast.message}</div>
             {toast.sessionId && <div className={css.hint}>Open session</div>}
           </div>
-          <button type="button" onClick={(event) => handleDismiss(event, toast.id)} aria-label="Dismiss notification" className={css.dismiss}>×</button>
+          <Button variant="ghost" size="sm" icon={<IconCloseOutline16 size={16} />} onClick={(event) => handleDismiss(event, toast.id)} onKeyDown={(event) => event.stopPropagation()} aria-label="Dismiss notification" className={css.dismiss} />
         </div>
       ))}
     </div>
