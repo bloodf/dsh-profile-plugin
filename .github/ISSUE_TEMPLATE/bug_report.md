@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in @dsh-local/company-profiles
+about: Report a bug in dsh-profile-plugin
 title: "[Bug] "
 labels: bug
 assignees: ''

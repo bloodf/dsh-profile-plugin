@@ -3,7 +3,8 @@
  * @module @dsh-local/company-profiles/registry
  */
 import { randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import type {
   CapabilityOverride,
@@ -66,6 +67,7 @@ export class CompanyProfileRegistry {
       hasActiveSessions: options.hasActiveSessions,
       onListenerError: options.onListenerError,
     })
+    await mkdir(dirname(options.path), { recursive: true, mode: 0o700 })
     await withFileLock(options.path, async () => {
       try {
         registry.document = await readDocument(options.path)
@@ -185,7 +187,8 @@ export class CompanyProfileRegistry {
   }
 
   private async hasActiveSessions(id: string): Promise<boolean> {
-    return await this.options.hasActiveSessions?.(id) ?? false
+    if (this.options.hasActiveSessions === undefined) return true
+    return await this.options.hasActiveSessions(id)
   }
 
   private notifyOne(listener: ProfileSubscription, snapshot: Readonly<ProfileDocument>): void {

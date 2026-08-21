@@ -1,6 +1,7 @@
 # One persistent Host row. Browser half loads from package dsh.client metadata.
 - insert:
     - id: company-profiles
-      name: '@dsh-local/company-profiles'
+      name: 'dsh-profile-plugin'
       config:
         path: !!js dshHomePath('company-profiles/profiles.json')
+        origin: http://127.0.0.1:3080

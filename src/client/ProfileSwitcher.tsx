@@ -1,5 +1,6 @@
 /** Sidebar footer action: compact profile switcher dropdown. */
-import React from 'react'
+import React, { useState } from 'react'
+import css from './ProfileSwitcher.module.css'
 import type { ProfileView } from './store.ts'
 
 export interface ProfileSwitcherProps {
@@ -11,81 +12,31 @@ export interface ProfileSwitcherProps {
 
 export function ProfileSwitcher(props: ProfileSwitcherProps): React.ReactNode {
   const { profiles, selected, onSelect, wide } = props
-  const active = profiles.find(p => p.id === selected)
-  const activeProfiles = profiles.filter(p => !p.archived)
-
+  const [open, setOpen] = useState(false)
+  const active = profiles.find(profile => profile.id === selected)
+  const activeProfiles = profiles.filter(profile => !profile.archived)
   if (!wide) {
-    // Rail mode: small avatar only
     return (
-      <button
-        type="button"
-        aria-label={`Active profile: ${active?.name ?? 'none'}`}
-        title={active?.name}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: 4,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {active && (
-          <img
-            src={active.avatarUri}
-            alt=""
-            width={24}
-            height={24}
-            style={{ borderRadius: 4, border: `2px solid ${active.color}` }}
-          />
-        )}
-      </button>
+      <div className={css.root} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }}>
+        <button type="button" className={css.railButton} aria-label={`Active profile: ${active?.name ?? 'none'}`} aria-haspopup="listbox" aria-expanded={open} title={active?.name} onClick={() => setOpen(value => !value)} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false) }}>
+          {active && <img src={active.avatarUri} alt="" className={css.avatar} style={{ '--profile-color': active.color } as React.CSSProperties} />}
+          {(active?.attention ?? 0) > 0 && <span className={css.badge} style={{ '--profile-color': active!.color } as React.CSSProperties} aria-label={`${active!.attention} sessions need attention`}>{active!.attention}</span>}
+        </button>
+        {open && <select autoFocus className={`${css.select} ${css.railSelect}`} value={selected} aria-label="Choose profile" onChange={(event) => { onSelect(event.target.value); setOpen(false) }} onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false) }}>
+          {activeProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name}{profile.attention > 0 ? ` (${profile.attention})` : ''}</option>)}
+        </select>}
+      </div>
     )
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '4px 8px',
-        minWidth: 0,
-      }}
-    >
-      {active && (
-        <img
-          src={active.avatarUri}
-          alt=""
-          width={20}
-          height={20}
-          style={{ borderRadius: 3, flexShrink: 0, border: `2px solid ${active.color}` }}
-        />
-      )}
-      <select
-        value={selected}
-        aria-label="Active profile"
-        onChange={(e) => onSelect(e.target.value)}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          background: 'transparent',
-          border: '1px solid var(--dsh-border, #d1d5db)',
-          borderRadius: 4,
-          padding: '2px 4px',
-          fontSize: 12,
-          color: 'inherit',
-          cursor: 'pointer',
-        }}
-      >
-        {activeProfiles.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-            {p.attention > 0 ? ` (${p.attention})` : ''}
-          </option>
-        ))}
-      </select>
+    <div className={css.root}>
+      <div className={css.wideControl}>
+        {active && <img src={active.avatarUri} alt="" className={css.wideAvatar} style={{ '--profile-color': active.color } as React.CSSProperties} />}
+        <select className={css.select} value={selected} aria-label="Active profile" onChange={(event) => onSelect(event.target.value)}>
+          {activeProfiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name}{profile.attention > 0 ? ` (${profile.attention})` : ''}</option>)}
+        </select>
+      </div>
     </div>
   )
 }

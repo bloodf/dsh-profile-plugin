@@ -2,7 +2,7 @@
 
 ## Project Structure
 
-**@dsh-local/company-profiles** is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), maintained under the [DeepSeek AI](https://github.com/deepseek-ai) organization.
+**dsh-profile-plugin** is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), maintained in the [bloodf/dsh-profile-plugin](https://github.com/bloodf/dsh-profile-plugin) repository.
 
 ## Roles
 
@@ -35,7 +35,7 @@ Releases follow [Semantic Versioning](https://semver.org/):
 - **Minor**: New features, non-breaking additions
 - **Major**: Breaking changes
 
-Releases are triggered by pushing a version tag (`v*`) and automated through the CI release workflow.
+Releases are triggered by pushing a version tag (`v*`) and automated through the CI release workflow, which publishes a packed tarball and its `SHA256SUMS` as GitHub Release assets (no npm publish).
 
 ## Relationship to DeepSeek Harness
 

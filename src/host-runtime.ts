@@ -44,12 +44,24 @@ export function installHostRuntime(
 
   ctx.on('tools/pre-execute', async (exec, next) => {
     const profileId = resolveProfileId(exec)
-    // Capture once. Final execute enforcement consumes this exact generation.
-    if (!executions.has(exec)) {
-      try { executions.set(exec, runtime.admit(profileId, exec.name)) }
-      catch (error) { return { kind: 'deny', reason: error instanceof Error ? error.message : String(error) } }
+    let lease = executions.get(exec)
+    if (lease === undefined) {
+      try {
+        lease = runtime.admit(profileId, exec.name)
+        executions.set(exec, lease)
+      } catch {
+        return { kind: 'deny', reason: 'PROFILE_CAPABILITY_DENIED' }
+      }
     }
-    return next()
+    try {
+      const decision = await next()
+      if (decision.kind !== 'allow') { executions.delete(exec); lease.release() }
+      return decision
+    } catch (error) {
+      executions.delete(exec)
+      lease.release()
+      throw error
+    }
   }, { prepend: true })
 
   ctx.on('tools/execute', async (exec: ToolDispatchExecution, next): Promise<ToolExecutionResult> => {

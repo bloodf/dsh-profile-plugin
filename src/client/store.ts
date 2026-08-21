@@ -19,6 +19,7 @@ export interface ProfileStoreState {
   profiles: ProfileView[]
   selected: string
   revision: number
+  csrfToken: string
   defaultProfileId: string
   order: string[]
   attention: AttentionEntry[]
@@ -29,6 +30,7 @@ export interface ProfileStoreState {
   editingId: string | null
   /** Pending toast messages */
   toasts: ToastMessage[]
+  soundEnabled: boolean
 }
 
 export interface ToastMessage {
@@ -40,6 +42,7 @@ export interface ToastMessage {
   sessionId?: string
   timestamp: number
   sound?: boolean
+  dedupeKey: string
 }
 
 export type ProfileStoreListener = () => void
@@ -65,6 +68,7 @@ function initialState(): ProfileStoreState {
     profiles: [],
     selected: '',
     revision: -1,
+    csrfToken: '',
     defaultProfileId: '',
     order: [],
     attention: [],
@@ -73,6 +77,7 @@ function initialState(): ProfileStoreState {
     error: null,
     editingId: null,
     toasts: [],
+    soundEnabled: false,
   }
 }
 
@@ -81,6 +86,12 @@ export class ProfileStore {
   private listeners = new Set<ProfileStoreListener>()
   private pollTimer: ReturnType<typeof setInterval> | undefined
   private toastId = 0
+  private readonly seenAttention = new Set<string>()
+
+  constructor(
+    private readonly openSessionCallback?: (profileId: string, sessionId: string) => void,
+    private readonly selectProfileCallback?: (profileId: string) => void,
+  ) {}
 
   getSnapshot(): ProfileStoreState {
     return this.state
@@ -102,47 +113,47 @@ export class ProfileStore {
 
   private applyDocument(doc: ApiDocument): void {
     const profiles = doc.profiles.map(p => profileView(p, this.state.attentionCounts))
+    const selected = this.state.selected && doc.order.includes(this.state.selected)
+      ? this.state.selected
+      : doc.defaultProfileId
+    const selectedChanged = selected !== this.state.selected
     this.update({
       profiles,
       revision: doc.revision,
+      csrfToken: doc.csrfToken,
       defaultProfileId: doc.defaultProfileId,
       order: doc.order,
-      selected: this.state.selected && doc.order.includes(this.state.selected)
-        ? this.state.selected
-        : doc.defaultProfileId,
+      selected,
       loading: false,
       error: null,
     })
+    if (selectedChanged) this.selectProfileCallback?.(selected)
   }
 
   private applyAttention(entries: AttentionEntry[], counts: Record<string, number>): void {
-    // Detect new attention entries for toasts
-    const previousCounts = this.state.attentionCounts
-    for (const [profileId, count] of Object.entries(counts)) {
-      const prev = previousCounts[profileId] ?? 0
-      if (count > prev) {
-        const profile = this.state.profiles.find(p => p.id === profileId)
-        if (profile) {
-          const newEntries = entries.filter(e => e.profileId === profileId)
-          for (const entry of newEntries) {
-            this.addToast({
-              profileId,
-              profileName: profile.name,
-              profileColor: profile.color,
-              message: `${entry.reasons.join(', ')} attention needed`,
-              sessionId: entry.sessionId,
-              sound: true,
-            })
-          }
-        }
+    for (const entry of entries) {
+      const dedupeKey = `${entry.profileId}/${entry.sessionId}/${[...entry.reasons].sort().join(',')}`
+      if (this.seenAttention.has(dedupeKey)) continue
+      this.seenAttention.add(dedupeKey)
+      const profile = this.state.profiles.find(candidate => candidate.id === entry.profileId)
+      if (profile !== undefined) {
+        this.addToast({
+          profileId: entry.profileId,
+          profileName: profile.name,
+          profileColor: profile.color,
+          message: 'Attention needed',
+          sessionId: entry.sessionId,
+          sound: this.state.soundEnabled,
+          dedupeKey,
+        })
       }
     }
     this.update({
       attention: entries,
       attentionCounts: counts,
-      profiles: this.state.profiles.map(p => ({
-        ...p,
-        attention: counts[p.id] ?? 0,
+      profiles: this.state.profiles.map(profile => ({
+        ...profile,
+        attention: counts[profile.id] ?? 0,
       })),
     })
   }
@@ -154,11 +165,21 @@ export class ProfileStore {
   }
 
   dismissToast(id: string): void {
-    this.update({ toasts: this.state.toasts.filter(t => t.id !== id) })
+    this.update({ toasts: this.state.toasts.filter(toast => toast.id !== id) })
+  }
+
+  enableSound(): void {
+    this.update({ soundEnabled: true })
+  }
+
+  openSession(profileId: string, sessionId: string): void {
+    this.selectProfile(profileId)
+    this.openSessionCallback?.(profileId, sessionId)
   }
 
   selectProfile(id: string): void {
     this.update({ selected: id })
+    this.selectProfileCallback?.(id)
   }
 
   setEditing(id: string | null): void {
@@ -176,32 +197,32 @@ export class ProfileStore {
   }
 
   async create(fields: Record<string, unknown>, capabilities?: ApiCapability[]): Promise<void> {
-    const doc = await api.createProfile(this.state.revision, fields, capabilities as never)
+    const doc = await api.createProfile(this.state.revision, fields, this.state.csrfToken, capabilities)
     this.applyDocument(doc)
   }
 
   async save(profileId: string, fields: Record<string, unknown>, capabilities?: ApiCapability[]): Promise<void> {
-    const doc = await api.updateProfile(this.state.revision, profileId, fields, capabilities as never)
+    const doc = await api.updateProfile(this.state.revision, profileId, fields, this.state.csrfToken, capabilities)
     this.applyDocument(doc)
   }
 
   async archive(profileId: string, archived: boolean): Promise<void> {
-    const doc = await api.archiveProfile(this.state.revision, profileId, archived)
+    const doc = await api.archiveProfile(this.state.revision, profileId, archived, this.state.csrfToken)
     this.applyDocument(doc)
   }
 
   async remove(profileId: string): Promise<void> {
-    const doc = await api.deleteProfile(this.state.revision, profileId)
+    const doc = await api.deleteProfile(this.state.revision, profileId, this.state.csrfToken)
     this.applyDocument(doc)
   }
 
   async clone(profileId: string): Promise<void> {
-    const doc = await api.cloneProfile(this.state.revision, profileId)
+    const doc = await api.cloneProfile(this.state.revision, profileId, this.state.csrfToken)
     this.applyDocument(doc)
   }
 
   async clearAttention(sessionId: string): Promise<void> {
-    const att = await api.clearAttention(sessionId)
+    const att = await api.clearAttention(sessionId, this.state.csrfToken)
     this.applyAttention(att.entries, att.counts)
   }
 

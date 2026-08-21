@@ -18,7 +18,7 @@ interface AttentionSession {
 /** Loose event shape — approval events may come from external augmentations. */
 interface AttentionEvent {
   readonly type: string
-  readonly data: Record<string, unknown>
+  readonly data: unknown
 }
 
 export class ProfileAttention {
@@ -30,14 +30,20 @@ export class ProfileAttention {
     const profileId = session.header.profileId
     if (profileId === undefined) return
     this.profiles.set(session.id, profileId)
+    const approvalId = (event.type === 'approval/asked' || event.type === 'approval/decided')
+      && typeof event.data === 'object' && event.data !== null
+      ? String((event.data as Record<string, unknown>)['id'])
+      : undefined
     if (event.type === 'approval/asked') {
       const approvals = this.openApprovals.get(session.id) ?? new Set<string>()
-      approvals.add(String(event.data['id']))
+      if (approvalId === undefined) return
+      approvals.add(approvalId)
       this.openApprovals.set(session.id, approvals)
       this.setReason(session.id, 'approval', true)
     } else if (event.type === 'approval/decided') {
       const approvals = this.openApprovals.get(session.id)
-      approvals?.delete(String(event.data['id']))
+      if (approvalId === undefined) return
+      approvals?.delete(approvalId)
       this.setReason(session.id, 'approval', (approvals?.size ?? 0) > 0)
     } else if (event.type === 'turn/error') {
       this.setReason(session.id, 'agent-error', true)
@@ -50,6 +56,11 @@ export class ProfileAttention {
     this.reasons.delete(sessionId)
     this.profiles.delete(sessionId)
     this.openApprovals.delete(sessionId)
+  }
+
+  /** Profile currently associated with a session, per the latest observed event. Undefined when unknown. */
+  profileOf(sessionId: SessionId): string | undefined {
+    return this.profiles.get(sessionId)
   }
 
   setQuestion(profileId: string, sessionId: SessionId, pending: boolean): void {

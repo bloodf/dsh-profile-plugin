@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { McpManager, type McpDiscovery } from '../src/mcp-manager.ts'
-import { createDefaultDocument, resolveProfile, validateDocument, type ProfileDocument } from '../src/model.ts'
+import { createDefaultDocument, resolveProfile, validateDocument, type ProfileDocument, type ResolvedCompanyProfile } from '../src/model.ts'
 
 function makeProfile(doc: ProfileDocument, id: string) {
   return resolveProfile(doc, id)
@@ -36,12 +36,18 @@ test('reconcile reports error for invalid stdio config', async () => {
   const manager = new McpManager({
     onError: (_error, context) => errors.push(context),
   })
-  const doc = createDefaultDocument()
-  doc.profiles[0]!.capabilities = [
-    { kind: 'mcp', key: 'bad', state: 'enabled', config: { transport: 'stdio', serverName: 'bad' } },
-  ]
-  const validated = validateDocument(doc)
-  const profile = makeProfile(validated, 'default')
+  const profile: ResolvedCompanyProfile = {
+    ...makeProfile(createDefaultDocument(), 'default'),
+    capabilities: [{
+      kind: 'mcp',
+      key: 'bad',
+      state: 'enabled',
+      config: { transport: 'stdio', serverName: 'bad' },
+      source: 'local',
+      definitionProfileId: 'default',
+      executionProfileId: 'default',
+    }],
+  }
   await manager.reconcile(profile, 1)
   assert.equal(errors.length, 1)
   assert.match(errors[0]!, /failed to open/)

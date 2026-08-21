@@ -6,10 +6,18 @@
  * @module @dsh-local/company-profiles/mcp-manager
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js'
+import {
+  StdioClientTransport,
+  getDefaultEnvironment,
+  type StdioServerParameters,
+} from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { auth } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
+import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import type { ToolDefinition, ToolRuntime } from '@deepseek-ai/dsh-tools'
 import type { McpDefinition, ResolvedCompanyProfile, EffectiveCapability } from './model.js'
 import type { OAuthVault } from './oauth.js'
 
@@ -36,11 +44,18 @@ interface ManagedConnection {
   readonly generation: number
   readonly client: Client
   readonly transport: StdioClientTransport | StreamableHTTPClientTransport
+  readonly rawToolNames: Map<string, string>
   toolNames: readonly string[]
   closed: boolean
+  activeCalls: number
+  drain?: { promise: Promise<void>; resolve: () => void }
 }
 
 export interface McpManagerOptions {
+  /** Harness tool registry used to expose discovered MCP tools. */
+  toolsRuntime?: Pick<ToolRuntime, 'register'>
+  /** Harness credential provider for configured env/header references. */
+  credentials?: CredentialProvider
   /** OAuth vault for streamable-http connections with `oauth: true`. */
   oauth?: OAuthVault
   /** Callback URL base for OAuth redirects (e.g. `http://127.0.0.1:3080`). */
@@ -53,6 +68,7 @@ export interface McpManagerOptions {
 
 export class McpManager {
   private readonly connections = new Map<string, ManagedConnection>()
+  private readonly registrations = new Map<string, () => void>()
   private readonly options: McpManagerOptions
 
   constructor(options: McpManagerOptions = {}) {
@@ -83,12 +99,10 @@ export class McpManager {
       }
     }
 
-    // Close connections no longer wanted
+    // Retire old connections without blocking replacement discovery.
     for (const [key, conn] of this.connections) {
       if (conn.profileId !== profile.id) continue
-      if (!wanted.has(conn.serverName) || conn.generation < generation) {
-        await this.closeConnection(key)
-      }
+      if (!wanted.has(conn.serverName) || conn.generation < generation) void this.closeConnection(key)
     }
 
     // Open new/updated connections
@@ -129,6 +143,8 @@ export class McpManager {
   async closeAll(): Promise<void> {
     const keys = [...this.connections.keys()]
     await Promise.all(keys.map(key => this.closeConnection(key)))
+    for (const dispose of this.registrations.values()) dispose()
+    this.registrations.clear()
   }
 
   private async openConnection(
@@ -141,10 +157,10 @@ export class McpManager {
     // Close existing if present
     if (this.connections.has(key)) await this.closeConnection(key)
 
-    const transport = this.createTransport(profileId, serverName, definition)
+    const transport = await this.createTransport(profileId, serverName, definition)
     const client = new Client(
-      { name: `dsh-profile-${profileId}`, version: '0.1.0' },
-      { capabilities: { tools: {} } },
+      { name: `dsh-profile-${profileId}`, version: '1.0.0' },
+      { capabilities: {} },
     )
 
     const conn: ManagedConnection = {
@@ -153,10 +169,11 @@ export class McpManager {
       generation,
       client,
       transport,
+      rawToolNames: new Map(),
       toolNames: [],
       closed: false,
+      activeCalls: 0,
     }
-    this.connections.set(key, conn)
 
     transport.onerror = (error) => {
       this.options.onError?.(error, `mcp-manager: transport error ${serverName}@${profileId}`)
@@ -168,43 +185,52 @@ export class McpManager {
       }
     }
 
-    await client.connect(transport)
+    await client.connect(transport as Transport)
     // Set up tools/changed notification
-    client.setNotificationHandler({ method: 'notifications/tools/list_changed' }, async () => {
+    client.setNotificationHandler(ToolListChangedNotificationSchema, async () => {
       try { await this.discoverTools(conn) }
       catch (error) { this.options.onError?.(error, `mcp-manager: re-discovery ${serverName}@${profileId}`) }
     })
     await this.discoverTools(conn)
   }
 
-  private createTransport(
+  private async createTransport(
     profileId: string,
     serverName: string,
     definition: McpDefinition,
-  ): StdioClientTransport | StreamableHTTPClientTransport {
+  ): Promise<StdioClientTransport | StreamableHTTPClientTransport> {
     if (definition.transport === 'stdio') {
       if (definition.command === undefined) throw new TypeError('stdio transport requires command')
-      return new StdioClientTransport({
+      const env = { ...getDefaultEnvironment(), ...definition.env }
+      for (const [name, ref] of Object.entries(definition.envRefs ?? {})) {
+        const resolved = await this.options.credentials?.resolve(credentialRef(ref))
+        if (resolved === undefined) throw new Error(`required credential for MCP env ${name} is unavailable`)
+        env[name] = resolved.value
+      }
+      const server: StdioServerParameters = {
         command: definition.command,
-        args: definition.args,
-        env: { ...getDefaultEnvironment(), ...definition.env },
-        cwd: definition.cwd,
-      })
+        ...(definition.args !== undefined ? { args: definition.args } : {}),
+        ...(Object.keys(env).length > 0 ? { env } : {}),
+        ...(definition.cwd !== undefined ? { cwd: definition.cwd } : {}),
+      }
+      return new StdioClientTransport(server)
     }
 
     if (definition.transport === 'streamable-http') {
       if (definition.url === undefined) throw new TypeError('streamable-http transport requires url')
       const url = new URL(definition.url)
-      const requestInit: RequestInit = {}
-      if (definition.headers !== undefined) {
-        requestInit.headers = { ...definition.headers }
+      const headers: Record<string, string> = { ...definition.headers }
+      for (const [name, ref] of Object.entries(definition.headerRefs ?? {})) {
+        const resolved = await this.options.credentials?.resolve(credentialRef(ref))
+        if (resolved === undefined) throw new Error(`required credential for MCP header ${name} is unavailable`)
+        headers[name] = resolved.value
       }
+      const requestInit: RequestInit = { ...(Object.keys(headers).length > 0 ? { headers } : {}) }
       const transportOpts: ConstructorParameters<typeof StreamableHTTPClientTransport>[1] = { requestInit }
 
       if (definition.oauth === true && this.options.oauth !== undefined) {
-        const redirectUrl = this.options.oauthRedirectBase
-          ? `${this.options.oauthRedirectBase}/company-profiles/oauth/callback`
-          : 'http://127.0.0.1:3080/company-profiles/oauth/callback'
+        if (this.options.oauthRedirectBase === undefined) throw new Error('canonical OAuth redirect origin is unavailable')
+        const redirectUrl = `${this.options.oauthRedirectBase}/company-profiles/oauth/callback`
         const authProvider = this.createOAuthProvider(profileId, serverName, url.origin, redirectUrl)
         transportOpts.authProvider = authProvider
       }
@@ -239,10 +265,10 @@ export class McpManager {
         redirect_uris: [redirectUrl],
         client_name: `DSH profile ${profileId}`,
       },
-      onRedirect: (url) => {
+      onRedirect: () => {
         this.options.onError?.(
-          new Error(`OAuth redirect required: ${url.toString()}`),
-          `mcp-manager: OAuth redirect ${serverName}@${profileId}`,
+          new Error('OAuth authorization is required'),
+          `mcp-manager: OAuth authorization required ${serverName}@${profileId}`,
         )
       },
     })
@@ -252,14 +278,47 @@ export class McpManager {
     if (conn.closed) return
     const result = await conn.client.listTools()
     const prefix = sanitizeServerName(conn.serverName)
-    const toolNames = result.tools.map(tool => `mcp__${prefix}__${tool.name}`)
-    conn.toolNames = toolNames
-    this.options.onDiscovery?.({
-      profileId: conn.profileId,
-      serverName: conn.serverName,
-      generation: conn.generation,
-      toolNames,
-    })
+    const rawToolNames = new Map<string, string>()
+    for (const tool of result.tools) {
+      const publicName = `mcp__${prefix}__${sanitizeToolName(tool.name)}`
+      if (rawToolNames.has(publicName)) throw new Error(`MCP tool name collision for ${publicName}`)
+      rawToolNames.set(publicName, tool.name)
+      this.registerDispatcher(publicName, tool.description ?? '', tool.inputSchema as Record<string, unknown>)
+    }
+    conn.rawToolNames.clear()
+    for (const [publicName, rawName] of rawToolNames) conn.rawToolNames.set(publicName, rawName)
+    conn.toolNames = [...rawToolNames.keys()]
+    this.options.onDiscovery?.({ profileId: conn.profileId, serverName: conn.serverName, generation: conn.generation, toolNames: conn.toolNames })
+  }
+
+  private registerDispatcher(publicName: string, description: string, parameters: Record<string, unknown>): void {
+    if (this.registrations.has(publicName) || this.options.toolsRuntime === undefined) return
+    const definition: ToolDefinition = {
+      name: publicName,
+      description,
+      parameters: parameters as ToolDefinition['parameters'],
+      output: {
+        schema: { type: 'object' },
+        render: (_args, value) => [{ type: 'text', text: renderMcpValue(value) }],
+      },
+      execute: async (args, exec) => {
+        const header = exec.agent?.session.header as { readonly profileId?: string } | undefined
+        const profileId = header?.profileId
+        if (profileId === undefined) throw new Error('PROFILE_ID_UNAVAILABLE')
+        const connection = [...this.connections.values()].find(candidate => !candidate.closed && candidate.profileId === profileId && candidate.rawToolNames.has(publicName))
+        if (connection === undefined) throw new Error('PROFILE_CAPABILITY_UNAVAILABLE')
+        const rawName = connection.rawToolNames.get(publicName)!
+        const argumentsValue = typeof args === 'object' && args !== null ? args as Record<string, unknown> : {}
+        connection.activeCalls++
+        try {
+          return await connection.client.callTool({ name: rawName, arguments: argumentsValue }, undefined, { signal: exec.signal }) as never
+        } finally {
+          connection.activeCalls--
+          if (connection.activeCalls === 0) connection.drain?.resolve()
+        }
+      },
+    }
+    this.registrations.set(publicName, this.options.toolsRuntime.register(definition))
   }
 
   private async closeConnection(key: string): Promise<void> {
@@ -267,12 +326,30 @@ export class McpManager {
     if (conn === undefined) return
     conn.closed = true
     this.connections.delete(key)
+    if (conn.activeCalls > 0) {
+      let resolve!: () => void
+      const promise = new Promise<void>(done => { resolve = done })
+      conn.drain = { promise, resolve }
+      await promise
+    }
     try { await conn.transport.close() }
-    catch (error) { this.options.onError?.(error, `mcp-manager: close ${conn.serverName}@${conn.profileId}`) }
+    catch { this.options.onError?.(new Error('MCP connection close failed'), `mcp-manager: close ${conn.serverName}@${conn.profileId}`) }
   }
 }
 
 /** Sanitize server name to valid MCP tool name segment. */
 function sanitizeServerName(name: string): string {
   return name.replace(/[^A-Za-z0-9_-]/g, '_')
+}
+
+function sanitizeToolName(name: string): string {
+  return name.replace(/[^A-Za-z0-9_-]/g, '_')
+}
+
+function renderMcpValue(value: unknown): string {
+  if (typeof value === 'object' && value !== null && 'content' in value && Array.isArray(value.content)) {
+    const text = value.content.flatMap(block => typeof block === 'object' && block !== null && 'text' in block && typeof block.text === 'string' ? [block.text] : [])
+    if (text.length > 0) return text.join('\n')
+  }
+  return JSON.stringify(value)
 }

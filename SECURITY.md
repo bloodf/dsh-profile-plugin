@@ -12,8 +12,7 @@
 
 Instead, please report vulnerabilities privately:
 
-1. **Email:** Send details to the maintainers via the contact listed on the [DeepSeek AI GitHub organization](https://github.com/deepseek-ai).
-2. **GitHub Security Advisory:** Use [GitHub's private vulnerability reporting](https://github.com/deepseek-ai/plugins/security/advisories/new) if available.
+**GitHub Security Advisory:** Open a [private security advisory](https://github.com/bloodf/dsh-profile-plugin/security/advisories/new).
 
 ### What to Include
 
@@ -42,4 +41,4 @@ This plugin's security architecture is documented in the [README Security Model]
 
 ## Scope
 
-This policy covers the `@dsh-local/company-profiles` plugin. For vulnerabilities in DeepSeek Harness itself, refer to the [Harness security policy](https://github.com/deepseek-ai/deepseek-harness/security).
+This policy covers the `dsh-profile-plugin` package. For vulnerabilities in DeepSeek Harness itself, refer to the [Harness security policy](https://github.com/deepseek-ai/deepseek-harness/security).

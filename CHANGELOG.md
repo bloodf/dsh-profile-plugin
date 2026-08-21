@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-21
+
+### Added
+
+- Real Harness ProfileId persistence, wire propagation, client session filtering, forks, and subagents.
+- Profile-scoped MCP transports, exact tool dispatch, credential references, OAuth isolation, and live generation retirement.
+- CSRF-protected redacted Host API, canonical OAuth origin, attention ownership validation, and fail-closed lifecycle guards.
+- Native DeepSeek Harness sidebar, Settings, and notification UI with dark/light token compatibility.
+- Public release automation, checksums, verified install flow, and real GUI screenshot.
+
 ## [0.1.0] - 2025-08-20
 
 ### Added
@@ -25,5 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Accessible React profile switcher and settings components (browser bundle).
 - Cordis tool-policy hooks for pre-execute and execute admission.
 
-[Unreleased]: https://github.com/deepseek-ai/plugins/compare/company-profiles-v0.1.0...HEAD
-[0.1.0]: https://github.com/deepseek-ai/plugins/releases/tag/company-profiles-v0.1.0
+[Unreleased]: https://github.com/bloodf/dsh-profile-plugin/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/bloodf/dsh-profile-plugin/releases/tag/v1.0.0
+[0.1.0]: https://github.com/bloodf/dsh-profile-plugin/releases/tag/v0.1.0

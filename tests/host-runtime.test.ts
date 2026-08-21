@@ -26,7 +26,7 @@ test('admit rejects tool not in current generation', () => {
 test('admit rejects tool from different profile', () => {
   const runtime = new ProfileRuntime()
   runtime.publish(profile(), 1, ['mcp__jira__search'])
-  assert.throws(() => runtime.admit('other-profile', 'mcp__jira__search'), /no active/)
+  assert.throws(() => runtime.admit('other-profile', 'mcp__jira__search'), /disabled/)
 })
 
 test('lease release is idempotent', () => {

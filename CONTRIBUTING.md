@@ -1,4 +1,4 @@
-# Contributing to @dsh-local/company-profiles
+# Contributing to dsh-profile-plugin
 
 Thank you for your interest in contributing! This document explains how to get started.
 
@@ -10,7 +10,7 @@ This project follows the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUC
 
 ### Reporting Bugs
 
-1. Search [existing issues](https://github.com/deepseek-ai/plugins/issues) to avoid duplicates.
+1. Search [existing issues](https://github.com/bloodf/dsh-profile-plugin/issues) to avoid duplicates.
 2. Use the **Bug Report** issue template.
 3. Include: Node.js version, Harness version, steps to reproduce, expected vs. actual behavior.
 
@@ -46,8 +46,8 @@ This project follows the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUC
 ## Development Setup
 
 ```sh
-git clone https://github.com/deepseek-ai/plugins.git
-cd plugins/dsh-profile-plugin
+git clone https://github.com/bloodf/dsh-profile-plugin.git
+cd dsh-profile-plugin
 pnpm install
 pnpm test    # Run tests
 pnpm build   # Compile TypeScript
@@ -62,7 +62,7 @@ pnpm build   # Compile TypeScript
 
 - Pure ESM (`"type": "module"`)
 - Strict TypeScript — the project uses `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
-- No JSX — use `React.createElement` for browser components
+- JSX for browser components (`.tsx`), plain `React.createElement` at plugin slot-registration boundaries
 - Atomic file operations for all persistent state mutations
 - Optimistic concurrency (CAS revisions) for registry mutations
 

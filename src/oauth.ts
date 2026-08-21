@@ -143,19 +143,26 @@ export class OAuthVault {
   }
 
   async revoke(binding: OAuthBinding): Promise<void> {
+    validateBinding(binding)
     const key = recordKey(binding)
-    let refs!: ReturnType<typeof secretRefs>
-    await this.change(draft => {
-      const record = requireRecord(draft, key)
-      assertBinding(record, binding)
-      record.revokedGeneration++
-      refs = { tokenRef: record.tokenRef, clientRef: record.clientRef, verifierRef: record.verifierRef }
+    await this.enqueue(async () => {
+      await withFileLock(this.path, async () => {
+        const current = await readDocumentOr(this.path, this.document)
+        const draft = structuredClone(current)
+        const record = requireRecord(draft, key)
+        assertBinding(record, binding)
+        record.revokedGeneration++
+        await Promise.all([
+          this.credentials.unset(credentialRef(record.tokenRef)),
+          this.credentials.unset(credentialRef(record.clientRef)),
+          this.credentials.unset(credentialRef(record.verifierRef)),
+        ])
+        draft.revision++
+        const valid = parseDocument(draft)
+        await persist(this.path, valid)
+        this.document = valid
+      })
     })
-    await Promise.all([
-      this.credentials.unset(credentialRef(refs.tokenRef)),
-      this.credentials.unset(credentialRef(refs.clientRef)),
-      this.credentials.unset(credentialRef(refs.verifierRef)),
-    ])
   }
 
   generation(binding: Pick<OAuthBinding, 'profileId' | 'serverId' | 'accountId'>): number {
@@ -168,12 +175,11 @@ export class OAuthVault {
     if (existing !== undefined) return existing
     const generation = this.generation(binding)
     const pending = run().then(async tokens => {
-      if (this.generation(binding) !== generation) throw new Error('OAuth credentials were revoked during refresh')
-      await this.saveJson(requireRecord(this.document, key).tokenRef, tokens)
-      if (this.generation(binding) !== generation) {
-        await this.credentials.unset(credentialRef(requireRecord(this.document, key).tokenRef))
-        throw new Error('OAuth credentials were revoked during refresh')
-      }
+      await this.enqueue(async () => {
+        const record = requireRecord(this.document, key)
+        if (record.revokedGeneration !== generation) throw new Error('OAuth credentials were revoked during refresh')
+        await this.saveJson(record.tokenRef, tokens)
+      })
       return tokens
     }).finally(() => this.refreshes.delete(key))
     this.refreshes.set(key, pending)
@@ -217,7 +223,7 @@ export class OAuthVault {
   }
 
   private change(change: (draft: OAuthDocument) => void): Promise<void> {
-    const operation = this.queue.then(() => withFileLock(this.path, async () => {
+    return this.enqueue(() => withFileLock(this.path, async () => {
       const current = await readDocumentOr(this.path, this.document)
       const draft = structuredClone(current)
       change(draft)
@@ -226,8 +232,12 @@ export class OAuthVault {
       await persist(this.path, valid)
       this.document = valid
     }))
-    this.queue = operation.catch(() => {})
-    return operation
+  }
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = this.queue.then(operation)
+    this.queue = pending.then(() => undefined, () => undefined)
+    return pending
   }
 
   private async saveJson(ref: string, value: unknown): Promise<void> {

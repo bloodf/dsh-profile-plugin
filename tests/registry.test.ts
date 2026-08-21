@@ -15,6 +15,7 @@ async function fixture() {
     path,
     now: () => `2026-01-01T00:00:0${tick++}.000Z`,
     id: () => `generated-${++id}`,
+    hasActiveSessions: () => false,
   })
   return { directory, path, registry }
 }

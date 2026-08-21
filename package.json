@@ -1,30 +1,58 @@
 {
-  "name": "@dsh-local/company-profiles",
-  "version": "0.1.0",
+  "name": "dsh-profile-plugin",
+  "version": "1.0.0",
   "description": "Durable company profiles for DeepSeek Harness",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
-    ".": { "types": "./lib/index.d.ts", "default": "./lib/index.js" },
-    "./client": { "types": "./lib/client.d.ts", "default": "./lib/client.js" },
-    "./model": { "types": "./lib/model.d.ts", "default": "./lib/model.js" },
-    "./oauth": { "types": "./lib/oauth.d.ts", "default": "./lib/oauth.js" },
-    "./runtime": { "types": "./lib/runtime.d.ts", "default": "./lib/runtime.js" },
-    "./attention": { "types": "./lib/attention.d.ts", "default": "./lib/attention.js" },
-    "./mcp-manager": { "types": "./lib/mcp-manager.d.ts", "default": "./lib/mcp-manager.js" },
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./model": {
+      "types": "./lib/model.d.ts",
+      "default": "./lib/model.js"
+    },
+    "./oauth": {
+      "types": "./lib/oauth.d.ts",
+      "default": "./lib/oauth.js"
+    },
+    "./runtime": {
+      "types": "./lib/runtime.d.ts",
+      "default": "./lib/runtime.js"
+    },
+    "./attention": {
+      "types": "./lib/attention.d.ts",
+      "default": "./lib/attention.js"
+    },
+    "./mcp-manager": {
+      "types": "./lib/mcp-manager.d.ts",
+      "default": "./lib/mcp-manager.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": ["lib", "cordis.patch.yml", "README.md", "LICENSE", "CHANGELOG.md"],
+  "files": [
+    "lib",
+    "docs/assets",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "RELEASE_NOTES.md"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/deepseek-ai/plugins.git",
-    "directory": "dsh-profile-plugin"
+    "url": "git+https://github.com/bloodf/dsh-profile-plugin.git"
   },
-  "homepage": "https://github.com/deepseek-ai/plugins/tree/main/dsh-profile-plugin#readme",
+  "homepage": "https://github.com/bloodf/dsh-profile-plugin#readme",
   "bugs": {
-    "url": "https://github.com/deepseek-ai/plugins/issues"
+    "url": "https://github.com/bloodf/dsh-profile-plugin/issues"
   },
   "keywords": [
     "deepseek",
@@ -38,10 +66,12 @@
   ],
   "funding": {
     "type": "github",
-    "url": "https://github.com/sponsors/deepseek-ai"
+    "url": "https://github.com/sponsors/bloodf"
   },
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
@@ -54,27 +84,46 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "bundle": "tsdown",
+    "clean": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\"",
+    "build": "pnpm clean && tsc -p tsconfig.json",
+    "bundle": "tsdown && node scripts/inject-client-css.mjs",
     "watch": "tsdown --watch",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:client": "node --import tsx --test tests/client/*.test.ts",
     "prepack": "pnpm build && pnpm bundle"
   },
-  "engines": { "node": "^22.19.0 || >=24.0.0" },
-  "peerDependencies": { "@deepseek-ai/cordis": "^4.0.1", "@deepseek-ai/dsh-atomic-write": "^0.1.0-rc.8", "@deepseek-ai/dsh-credentials": "^0.1.0-rc.8", "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.8", "@deepseek-ai/dsh-session": "^0.1.0-rc.8", "@deepseek-ai/dsh-tools": "^0.1.0-rc.8", "@modelcontextprotocol/sdk": "^1.29.0", "react": "^18.2.0" },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "packageManager": "pnpm@11.20.0",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-atomic-write": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-session": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.8",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "react": "^18.2.0"
+  },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-atomic-write": "file:/Users/heitor/Developer/deepseek-harness/packages/util/atomic-write",
-    "@deepseek-ai/dsh-credentials": "file:/Users/heitor/Developer/deepseek-harness/packages/credentials/credentials",
-    "@deepseek-ai/dsh-client-ui-slots": "file:/Users/heitor/Developer/deepseek-harness/packages/client/ui-slots",
+    "@deepseek-ai/dsh-atomic-write": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.8",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tsdown/css": "^0.22.14",
     "@types/node": "^24.0.0",
     "@types/react": "~18.3.1",
     "jsdom": "^26.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "tsdown": "^0.12.0",
+    "tsdown": "^0.22.14",
     "tsx": "^4.20.0",
     "typescript": "^6.0.0"
   },

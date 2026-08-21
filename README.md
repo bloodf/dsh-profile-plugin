@@ -1,4 +1,4 @@
-# @dsh-local/company-profiles
+# dsh-profile-plugin
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%5E22.19.0%20%7C%7C%20%3E%3D24-brightgreen)](https://nodejs.org)
@@ -19,6 +19,7 @@ Durable company profile management for [DeepSeek Harness](https://github.com/dee
 - [Development](#development)
 - [Compatibility](#compatibility)
 - [Contributing](#contributing)
+- [Release](#release)
 - [License](#license)
 
 ## Overview
@@ -99,14 +100,9 @@ Profiles persist to a standalone JSON file outside the Harness installation dire
 - Request body size capped at **256 KiB** to prevent abuse.
 - Optimistic concurrency via **`expectedRevision`** on every mutation — concurrent edits fail predictably with `RevisionConflictError`.
 
-### Current Limitations
+### Compatibility boundary
 
-Harness does not yet expose first-class `ProfileId` session/RPC seams. Until that ships:
-
-- Browser components are exported but **not registered** into Settings/sidebar slots.
-- Session lists are **not filtered** by profile.
-
-Profile identity falls back to `'default'` for legacy sessions without `header.profileId`. Model/provider selection remains global by design.
+Profiles require the Harness `ProfileId` compatibility seam carried by this release's companion core branch. The plugin fails closed when authoritative profile identity is unavailable. Model/provider selection remains Harness-global by design; profile colors never alter global theme tokens.
 
 ## Installation
 
@@ -119,11 +115,22 @@ Profile identity falls back to `'default'` for legacy sessions without `header.p
 ### Install the Plugin
 
 ```sh
-# From the plugin directory
+# From a git clone
+git clone https://github.com/bloodf/dsh-profile-plugin.git
+cd dsh-profile-plugin
 pnpm install
+pnpm build
+pnpm bundle
 
 # Register with Harness
 dsh plugin --profile web add /absolute/path/to/dsh-profile-plugin
+```
+
+Alternatively, download a release tarball and its `SHA256SUMS` from the [Releases page](https://github.com/bloodf/dsh-profile-plugin/releases), verify the checksum, extract it, then register the extracted directory with `dsh plugin add`:
+
+```sh
+sha256sum -c SHA256SUMS
+tar xzf dsh-profile-plugin-*.tgz
 ```
 
 The plugin declares one Host row in `cordis.patch.yml`; the browser half loads automatically through the `dsh.client` package metadata.
@@ -135,6 +142,7 @@ cd /path/to/dsh-profile-plugin
 git pull
 pnpm install
 pnpm build
+pnpm bundle
 # Restart Harness to pick up changes
 ```
 
@@ -153,7 +161,7 @@ The plugin is configured through `cordis.patch.yml`:
 ```yaml
 - insert:
     - id: company-profiles
-      name: '@dsh-local/company-profiles'
+      name: 'dsh-profile-plugin'
       config:
         path: !!js dshHomePath('company-profiles/profiles.json')
 ```
@@ -231,18 +239,11 @@ All mutations go through `POST /company-profiles/api` with a JSON body containin
 | `oauth-begin` | Start an OAuth authorization flow |
 | `oauth-revoke` | Revoke OAuth credentials for a binding |
 
-## Screenshots
+## Screenshot
 
-<!-- PLACEHOLDER: Profile switcher component -->
-<!-- ![Profile Switcher](docs/screenshots/profile-switcher.png) -->
+![Profiles settings in DeepSeek Harness](docs/assets/profiles-settings.webp)
 
-<!-- PLACEHOLDER: Profiles settings panel -->
-<!-- ![Profiles Settings](docs/screenshots/profiles-settings.png) -->
-
-<!-- PLACEHOLDER: Attention indicators -->
-<!-- ![Attention Indicators](docs/screenshots/attention-indicators.png) -->
-
-> **Note:** Screenshots will be added once browser components are registered into Harness UI slots.
+Profiles run inside the existing Harness sidebar and Settings shell. Profile color decorates identity controls only; global theme and model selection remain unchanged.
 
 ## Troubleshooting
 
@@ -336,11 +337,13 @@ dsh-profile-plugin/
 │   ├── host-api.ts       # HTTP API and OAuth callback routes
 │   ├── attention.ts      # Session attention aggregation
 │   ├── mcp-manager.ts    # Live MCP connections (stdio + streamable-http)
-│   └── client.ts         # React browser components
+│   └── client/            # React browser components (client bundle entry)
 ├── tests/
-│   ├── registry.test.ts  # Registry CRUD and concurrency tests
-│   ├── oauth.test.ts     # OAuth flow and credential tests
+│   ├── registry.test.ts      # Registry CRUD and concurrency tests
+│   ├── oauth.test.ts         # OAuth flow and credential tests
 │   ├── capabilities.test.ts  # Capability inheritance and admission tests
+│   ├── attention.test.ts     # Session attention aggregation tests
+│   ├── host-runtime.test.ts  # Tool-policy admission hook tests
 │   └── mcp-manager.test.ts   # MCP manager connection lifecycle tests
 ├── cordis.patch.yml      # Harness plugin row declaration
 ├── package.json
@@ -351,7 +354,7 @@ dsh-profile-plugin/
 
 - Pure ESM (`"type": "module"`)
 - Strict TypeScript with `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`
-- No JSX — React components use `React.createElement` directly
+- JSX for browser components (`.tsx`), plain `React.createElement` at plugin slot-registration boundaries
 - Atomic file writes with file-level locking for all persistent state
 - Optimistic concurrency (CAS revisions) on every mutation
 
@@ -368,6 +371,9 @@ dsh-profile-plugin/
 | `@deepseek-ai/dsh-host-webserver` | ^0.1.0-rc.8 |
 | `@deepseek-ai/dsh-session` | ^0.1.0-rc.8 |
 | `@deepseek-ai/dsh-tools` | ^0.1.0-rc.8 |
+| `@deepseek-ai/dsh-client-runtime` | ^0.1.0-rc.8 |
+| `@deepseek-ai/dsh-client-ui-settings` | ^0.1.0-rc.8 |
+| `@deepseek-ai/dsh-client-ui-slots` | ^0.1.0-rc.8 |
 
 Tested against MCP SDK 1.29 and 1.30. Expand peer ranges only after testing against newer versions.
 
@@ -375,9 +381,13 @@ Tested against MCP SDK 1.29 and 1.30. Expand peer ranges only after testing agai
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on reporting issues, submitting pull requests, and development setup.
 
+## Release
+
+See [RELEASE_NOTES.md](./RELEASE_NOTES.md) for the current release summary and the release-cutting procedure, and [SECURITY.md](./SECURITY.md) for the vulnerability reporting policy. Releases publish a packed tarball and its `SHA256SUMS` as GitHub Release assets; nothing is published to the npm registry.
+
 ## License
 
-[MIT](./LICENSE) © 2025 DeepSeek AI
+[MIT](./LICENSE) © 2026 Heitor Ribeiro
 
 ---
 

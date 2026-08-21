@@ -1,5 +1,6 @@
 /** Shell overlay: attention toast with optional sound and click navigation. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import css from './AttentionToast.module.css'
 import type { ProfileStore, ToastMessage } from './store.ts'
 
 const TOAST_TTL = 8_000
@@ -32,21 +33,23 @@ export interface AttentionToastLayerProps {
 
 export function AttentionToastLayer({ store }: AttentionToastLayerProps): React.ReactNode {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [soundEnabled, setSoundEnabled] = useState(store.getSnapshot().soundEnabled)
   const playedRef = useRef(new Set<string>())
 
   useEffect(() => {
-    const unsub = store.subscribe(() => {
+    const update = () => {
       const snap = store.getSnapshot()
       setToasts(snap.toasts)
-      // Play sound for new toasts
+      setSoundEnabled(snap.soundEnabled)
       for (const toast of snap.toasts) {
-        if (toast.sound && !playedRef.current.has(toast.id)) {
+        if (snap.soundEnabled && toast.sound && !playedRef.current.has(toast.id)) {
           playedRef.current.add(toast.id)
           playNotificationSound()
         }
       }
-    })
-    return unsub
+    }
+    update()
+    return store.subscribe(update)
   }, [store])
 
   // Auto-dismiss after TTL
@@ -64,10 +67,7 @@ export function AttentionToastLayer({ store }: AttentionToastLayerProps): React.
   }, [toasts, store])
 
   const handleClick = useCallback((toast: ToastMessage) => {
-    if (toast.sessionId) {
-      // Navigate to the session — set hash for the shell to pick up
-      window.location.hash = `session=${toast.sessionId}`
-    }
+    if (toast.sessionId) store.openSession(toast.profileId, toast.sessionId)
     store.dismissToast(toast.id)
   }, [store])
 
@@ -76,98 +76,22 @@ export function AttentionToastLayer({ store }: AttentionToastLayerProps): React.
     store.dismissToast(id)
   }, [store])
 
-  if (toasts.length === 0) return null
+  if (toasts.length === 0 && soundEnabled) return null
 
   return (
-    <div
-      role="log"
-      aria-label="Profile attention notifications"
-      aria-live="polite"
-      style={{
-        position: 'fixed',
-        top: 12,
-        right: 12,
-        zIndex: 10000,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        pointerEvents: 'auto',
-        maxWidth: 360,
-      }}
-    >
+    <div role="log" aria-label="Profile attention notifications" aria-live="polite" className={css.layer}>
+      {!soundEnabled && <button type="button" onClick={() => store.enableSound()} className={css.sound}>Enable notification sound</button>}
       {toasts.map(toast => (
-        <div
-          key={toast.id}
-          role="alert"
-          onClick={() => handleClick(toast)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(toast) }}
-          tabIndex={0}
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 8,
-            padding: '10px 12px',
-            background: 'var(--dsh-bg-primary, #fff)',
-            border: `2px solid ${toast.profileColor}`,
-            borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            cursor: toast.sessionId ? 'pointer' : 'default',
-            animation: 'dsh-profile-toast-in 0.3s ease-out',
-            fontSize: 13,
-          }}
-        >
-          <div
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: toast.profileColor,
-              flexShrink: 0,
-              marginTop: 5,
-            }}
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 12, color: toast.profileColor }}>
-              {toast.profileName}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--dsh-text-primary, #374151)' }}>
-              {toast.message}
-            </div>
-            {toast.sessionId && (
-              <div style={{ fontSize: 11, color: 'var(--dsh-text-secondary, #9ca3af)', marginTop: 2 }}>
-                Click to open session
-              </div>
-            )}
+        <div key={toast.id} role="alert" onClick={() => handleClick(toast)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') handleClick(toast) }} tabIndex={0} className={css.toast} style={{ '--profile-color': toast.profileColor } as React.CSSProperties}>
+          <span className={css.dot} />
+          <div className={css.body}>
+            <div className={css.profile}>{toast.profileName}</div>
+            <div className={css.message}>{toast.message}</div>
+            {toast.sessionId && <div className={css.hint}>Open session</div>}
           </div>
-          <button
-            type="button"
-            onClick={(e) => handleDismiss(e, toast.id)}
-            aria-label="Dismiss notification"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 16,
-              color: 'var(--dsh-text-secondary, #9ca3af)',
-              padding: 0,
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
+          <button type="button" onClick={(event) => handleDismiss(event, toast.id)} aria-label="Dismiss notification" className={css.dismiss}>×</button>
         </div>
       ))}
     </div>
   )
-}
-
-/** Inject keyframe animation for toast entrance. */
-export function injectToastStyles(): () => void {
-  const id = 'dsh-profile-toast-keyframes'
-  if (typeof document === 'undefined' || document.getElementById(id)) return () => {}
-  const style = document.createElement('style')
-  style.id = id
-  style.textContent = `@keyframes dsh-profile-toast-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }`
-  document.head.appendChild(style)
-  return () => { style.remove() }
 }

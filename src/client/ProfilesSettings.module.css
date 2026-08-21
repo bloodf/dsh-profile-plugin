@@ -1,0 +1,349 @@
+/* Settings section: profile CRUD, editor, capability matrix — native DeepSeek Harness tokens. */
+
+.section {
+  max-width: 720px;
+  padding: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 16px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+
+.btn {
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+
+.btnPrimary {
+  composes: btn;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.btnPrimary:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.btnDanger {
+  composes: btn;
+  color: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.btnSmall {
+  composes: btn;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.btnDangerSmall {
+  composes: btnDanger;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+/* ── Profile list ────────────────────────────────────────────────────── */
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 8px;
+  background: var(--dsw-alias-bg-layer-3);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  box-shadow: var(--dsw-shadow-lv1);
+}
+
+.rowArchived {
+  opacity: 0.5;
+}
+
+.avatar {
+  border-radius: 8px;
+  border: 2px solid var(--profile-ring-color, var(--dsw-alias-border-l2));
+  flex-shrink: 0;
+}
+
+.rowBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowNameLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.rowName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowSub {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  border: 1px solid var(--dsw-alias-border-l2);
+}
+
+.badgeAttention {
+  composes: badge;
+  color: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.badgeSuccess {
+  composes: badge;
+  color: var(--dsw-alias-brand-primary);
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+/* ── Alerts ──────────────────────────────────────────────────────────── */
+
+.alert {
+  color: var(--dsw-alias-state-error-primary);
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+/* ── Editor ──────────────────────────────────────────────────────────── */
+
+.fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+
+.legend {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.fieldFull {
+  grid-column: 1 / -1;
+}
+
+.label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 2px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.field {
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+
+.textarea {
+  composes: field;
+  min-height: 48px;
+  resize: vertical;
+}
+
+.colorRow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.colorSwatch {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.colorField {
+  composes: field;
+  flex: 1;
+}
+
+.emptyNote {
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+  margin-bottom: 8px;
+}
+
+.mt8 {
+  margin-top: 8px;
+}
+
+/* ── Capability table ────────────────────────────────────────────────── */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.tableHeadRow {
+  border-bottom: 2px solid var(--dsw-alias-border-l2);
+}
+
+.th {
+  text-align: left;
+  padding: 4px 8px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.thCenter {
+  composes: th;
+  text-align: center;
+}
+
+.thRight {
+  composes: th;
+  text-align: right;
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.td {
+  padding: 4px 8px;
+}
+
+.tdCenter {
+  composes: td;
+  text-align: center;
+}
+
+.tdRight {
+  composes: td;
+  text-align: right;
+}
+
+.tdMono {
+  composes: td;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.stateInherited {
+  composes: btnSmall;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateEnabled {
+  composes: btnSmall;
+  color: var(--dsw-alias-brand-primary);
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.stateDisabled {
+  composes: btnSmall;
+  color: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+/* ── OAuth connections ───────────────────────────────────────────────── */
+
+.oauthRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.oauthServer {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── Footer actions ──────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}

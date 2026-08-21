@@ -8,11 +8,19 @@
  * Uses React.createElement at the slot boundary (TSX in components).
  */
 import React from 'react'
-import type { Context } from '@deepseek-ai/cordis'
+import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { ProfileStore } from './store.ts'
 import { ProfileSwitcher } from './ProfileSwitcher.tsx'
 import { ProfilesSettings } from './ProfilesSettings.tsx'
-import { AttentionToastLayer, injectToastStyles } from './AttentionToast.tsx'
+import { AttentionToastLayer } from './AttentionToast.tsx'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: { wide: boolean } }
+    'shell.overlay': { kind: 'list'; scope: 'root' }
+  }
+}
 
 // Re-export component types for tests
 export { ProfileStore } from './store.ts'
@@ -23,23 +31,29 @@ export { avatarDataUri, stableHash, defaultColor, defaultAvatarSeed, avatarIniti
 export type { ProfileView, ProfileStoreState, ToastMessage } from './store.ts'
 
 /** Client services this plugin consumes. */
-export const inject = ['slots']
+export const inject = ['slots', 'sessions', 'workspaces']
 
-export function apply(ctx: Context): void {
-  const slots = ctx.get('slots') as import('@deepseek-ai/dsh-client-ui-slots').SlotRegistry
-  if (!slots) return
+export function apply(ctx: ClientContext): void {
+  const slots = ctx.slots
 
-  const store = new ProfileStore()
+  const store = new ProfileStore(
+    (_profileId, sessionId) => {
+      const sessions = ctx.sessions as unknown as { open?: (id: string) => void }
+      sessions.open?.(sessionId)
+    },
+    profileId => {
+      const sessions = ctx.sessions as unknown as { setProfile?: (id: string) => void }
+      const workspaces = ctx.workspaces as unknown as { setProfile?: (id: string) => void }
+      sessions.setProfile?.(profileId)
+      workspaces.setProfile?.(profileId)
+    },
+  )
 
   ctx.effect(() => {
     store.startPolling()
     return () => { store.dispose() }
   }, 'company-profiles: store lifecycle')
 
-  // Toast keyframe injection
-  ctx.effect(() => {
-    return injectToastStyles()
-  }, 'company-profiles: toast styles')
 
   // ── sidebar.footer.action: profile switcher ───────────────────────────
   slots.inject('sidebar.footer.action', () =>
