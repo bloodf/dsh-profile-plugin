@@ -56,6 +56,12 @@ export interface OAuthCredentialStore {
   unset(ref: CredentialRef): Promise<void>
 }
 
+export interface OAuthBindingStatus {
+  serverId: string
+  accountId: string
+  connected: boolean
+  generation: number
+}
 export class OAuthVault {
   private document: OAuthDocument = { schemaVersion: 1, revision: 0, records: {} }
   private queue: Promise<void> = Promise.resolve()
@@ -142,6 +148,21 @@ export class OAuthVault {
     }
   }
 
+  async claimCallbackByState(state: string): Promise<{ binding: OAuthBinding; claim: OAuthCallbackClaim }> {
+    const stateHash = hash(state)
+    const record = Object.values(this.document.records).find(candidate => candidate.stateHash !== undefined && equal(candidate.stateHash, stateHash))
+    if (record === undefined) throw new Error('invalid, expired, or consumed OAuth state')
+    const binding: OAuthBinding = {
+      profileId: record.profileId,
+      serverId: record.serverId,
+      accountId: record.accountId,
+      issuer: record.issuer,
+      redirectUrl: record.redirectUrl,
+      browserBinding: record.browserBinding,
+    }
+    return { binding, claim: await this.claimCallback({ ...binding, state }) }
+  }
+
   async revoke(binding: OAuthBinding): Promise<void> {
     validateBinding(binding)
     const key = recordKey(binding)
@@ -167,6 +188,28 @@ export class OAuthVault {
 
   generation(binding: Pick<OAuthBinding, 'profileId' | 'serverId' | 'accountId'>): number {
     return this.document.records[recordKey(binding)]?.revokedGeneration ?? 0
+  }
+
+  async status(profileId: string): Promise<OAuthBindingStatus[]> {
+    const statuses: OAuthBindingStatus[] = []
+    for (const record of Object.values(this.document.records)) {
+      if (record.profileId !== profileId) continue
+      const info = await this.credentials.describe(credentialRef(record.tokenRef))
+      statuses.push({ serverId: record.serverId, accountId: record.accountId, connected: info.configured, generation: record.revokedGeneration })
+    }
+    return statuses
+  }
+
+  async revokeAccount(binding: Pick<OAuthBinding, 'profileId' | 'serverId' | 'accountId'>): Promise<void> {
+    const record = requireRecord(this.document, recordKey(binding))
+    await this.revoke({
+      profileId: record.profileId,
+      serverId: record.serverId,
+      accountId: record.accountId,
+      issuer: record.issuer,
+      redirectUrl: record.redirectUrl,
+      browserBinding: record.browserBinding,
+    })
   }
 
   refreshSingleFlight(binding: OAuthBinding, run: () => Promise<OAuthTokens>): Promise<OAuthTokens> {

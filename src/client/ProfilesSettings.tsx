@@ -1,5 +1,5 @@
 /** Settings section: profile CRUD, editor, capability matrix, OAuth connections, validation. */
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { ProfileStore, ProfileView } from './store.ts'
 import type { ApiCapability } from './api.ts'
 import styles from './ProfilesSettings.module.css'
@@ -131,6 +131,13 @@ function ProfileEditor({ profile, store }: { profile: ProfileView; store: Profil
   )
   const [saving, setSaving] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [oauthStatuses, setOauthStatuses] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    void store.oauthStatus(profile.id).then(result => {
+      setOauthStatuses(Object.fromEntries(result.bindings.map(binding => [`${binding.serverId}/${binding.accountId}`, binding.connected])))
+    }).catch(() => { setOauthStatuses({}) })
+  }, [profile.id, store])
 
   const validate = useCallback((): boolean => {
     if (!fields.displayName.trim()) {
@@ -272,23 +279,22 @@ function ProfileEditor({ profile, store }: { profile: ProfileView; store: Profil
         </button>
       </fieldset>
 
-      {/* OAuth connections (read-only display) */}
       <fieldset className={styles.fieldset}>
         <legend className={styles.legend}>OAuth Connections</legend>
-        {capabilities.filter(c => c.kind === 'mcp' && c.state === 'enabled' && (c.config as Record<string, unknown>)?.oauth).length === 0
+        {capabilities.filter(capability => capability.kind === 'mcp' && capability.state === 'enabled' && (capability.config as Record<string, unknown>)?.oauth).length === 0
           ? <div className={styles.emptyNote}>No OAuth-enabled MCP servers.</div>
           : capabilities
-            .filter(c => c.kind === 'mcp' && c.state === 'enabled' && (c.config as Record<string, unknown>)?.oauth)
-            .map((c, i) => (
-              <div key={i} className={styles.oauthRow}>
-                <span className={styles.badgeSuccess}>OAuth</span>
-                <span>{c.key}</span>
-                <span className={styles.oauthServer}>
-                  ({((c.config as Record<string, unknown>)?.serverName as string) ?? 'unknown server'})
-                </span>
+            .filter(capability => capability.kind === 'mcp' && capability.state === 'enabled' && (capability.config as Record<string, unknown>)?.oauth)
+            .map((capability) => {
+              const serverId = ((capability.config as Record<string, unknown>)?.serverName as string) || capability.key
+              const connected = oauthStatuses[`${serverId}/default`] === true
+              return <div key={capability.key} className={styles.oauthRow}>
+                <span className={connected ? styles.badgeSuccess : styles.badge}>{connected ? 'Connected' : 'Not connected'}</span>
+                <span>{capability.key}</span>
+                <span className={styles.oauthServer}>({serverId})</span>
+                <button type="button" className={styles.btnSmall} onClick={() => { void (connected ? store.disconnectOAuth(profile.id, serverId) : store.connectOAuth(profile.id, serverId)) }}>{connected ? 'Disconnect' : 'Connect'}</button>
               </div>
-            ))
-        }
+            })}
       </fieldset>
 
       {/* Actions */}

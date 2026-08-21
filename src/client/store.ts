@@ -226,6 +226,19 @@ export class ProfileStore {
     this.applyAttention(att.entries, att.counts)
   }
 
+  oauthStatus(profileId: string): Promise<api.OAuthStatusResponse> {
+    return api.fetchOAuthStatus(profileId)
+  }
+
+  async connectOAuth(profileId: string, serverId: string, accountId = 'default'): Promise<void> {
+    const result = await api.oauthBegin(this.state.revision, profileId, serverId, accountId, this.state.csrfToken)
+    window.location.assign(result.authorizationUrl)
+  }
+
+  async disconnectOAuth(profileId: string, serverId: string, accountId = 'default'): Promise<void> {
+    await api.oauthRevoke(this.state.revision, profileId, serverId, accountId, this.state.csrfToken)
+  }
+
   startPolling(intervalMs = 15_000): void {
     this.stopPolling()
     void this.refresh()

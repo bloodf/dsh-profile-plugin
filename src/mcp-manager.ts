@@ -12,7 +12,7 @@ import {
   type StdioServerParameters,
 } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
+import { auth, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
@@ -132,6 +132,19 @@ export class McpManager {
     await this.discoverTools(conn)
   }
 
+  async beginAuth(input: { profileId: string; serverId: string; accountId: string }): Promise<string> {
+    const conn = this.connections.get(connectionKey(input.profileId, input.serverId))
+    if (conn === undefined || !(conn.transport instanceof StreamableHTTPClientTransport)) throw new Error('OAuth connection is unavailable')
+    if (this.options.oauthRedirectBase === undefined) throw new Error('canonical OAuth redirect origin is unavailable')
+    const serverUrl = conn.transport['_url'] as URL | undefined
+    if (serverUrl === undefined) throw new Error('OAuth server URL is unavailable')
+    let authorizationUrl: string | undefined
+    const provider = this.createOAuthProvider(input.profileId, input.serverId, input.accountId, serverUrl.origin, `${this.options.oauthRedirectBase}/company-profiles/oauth/callback`, url => { authorizationUrl = url.toString() })
+    await auth(provider, { serverUrl })
+    if (authorizationUrl === undefined) throw new Error('OAuth authorization URL is unavailable')
+    return authorizationUrl
+  }
+
   /** Close all connections for a profile. */
   async closeProfile(profileId: string): Promise<void> {
     for (const [key, conn] of this.connections) {
@@ -231,7 +244,7 @@ export class McpManager {
       if (definition.oauth === true && this.options.oauth !== undefined) {
         if (this.options.oauthRedirectBase === undefined) throw new Error('canonical OAuth redirect origin is unavailable')
         const redirectUrl = `${this.options.oauthRedirectBase}/company-profiles/oauth/callback`
-        const authProvider = this.createOAuthProvider(profileId, serverName, url.origin, redirectUrl)
+        const authProvider = this.createOAuthProvider(profileId, serverName, 'default', url.origin, redirectUrl)
         transportOpts.authProvider = authProvider
       }
 
@@ -244,8 +257,10 @@ export class McpManager {
   private createOAuthProvider(
     profileId: string,
     serverName: string,
+    accountId: string,
     issuer: string,
     redirectUrl: string,
+    onRedirect?: (url: URL) => void,
   ): OAuthClientProvider {
     const vault = this.options.oauth
     if (vault === undefined) throw new Error('OAuth vault required for OAuth-enabled MCP server')
@@ -253,7 +268,7 @@ export class McpManager {
     const binding = {
       profileId,
       serverId: serverName,
-      accountId: 'default',
+      accountId,
       issuer: issuer.startsWith('https://') ? issuer : `https://${new URL(issuer).host}`,
       redirectUrl,
       browserBinding: `mcp-${profileId}-${serverName}`,
@@ -265,8 +280,9 @@ export class McpManager {
         redirect_uris: [redirectUrl],
         client_name: `DSH profile ${profileId}`,
       },
-      onRedirect: () => {
-        this.options.onError?.(
+      onRedirect: (url) => {
+        onRedirect?.(url)
+        if (onRedirect === undefined) this.options.onError?.(
           new Error('OAuth authorization is required'),
           `mcp-manager: OAuth authorization required ${serverName}@${profileId}`,
         )

@@ -20,6 +20,7 @@ export interface OAuthFinishManager {
     accountId: string
     code: string
   }): Promise<void>
+  beginAuth?(input: { profileId: string; serverId: string; accountId: string }): Promise<string>
 }
 
 export interface HostApiOptions {
@@ -47,6 +48,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, options: Reg
     if (req.method === 'GET') {
       const url = requestUrl(req, options.siteOrigin)
       if (url.searchParams.get('view') === 'attention') return json(res, 200, { entries: options.attention.list(), counts: options.attention.counts() })
+      if (url.searchParams.get('view') === 'oauth') return json(res, 200, { bindings: await options.oauth.status(requiredQuery(url, 'profileId')) })
       return json(res, 200, profileView(options.registry.snapshot(), options.registry, options.csrfToken))
     }
     if (req.method !== 'POST') return json(res, 405, { error: 'method-not-allowed' })
@@ -81,6 +83,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, options: Reg
       case 'archive': document = await options.registry.archive(revision, stringField(body, 'profileId'), booleanField(body, 'archived')); break
       case 'delete': document = await options.registry.delete(revision, stringField(body, 'profileId')); break
       case 'reorder': document = await options.registry.reorder(revision, stringArray(body, 'order')); break
+      case 'oauth-revoke':
+        await options.oauth.revokeAccount({ profileId: stringField(body, 'profileId'), serverId: stringField(body, 'serverId'), accountId: stringField(body, 'accountId') })
+        return json(res, 200, { ok: true })
+      case 'oauth-begin': {
+        if (options.oauthFinish?.beginAuth === undefined) return json(res, 503, { error: 'oauth-unavailable' })
+        const authorizationUrl = await options.oauthFinish.beginAuth({ profileId: stringField(body, 'profileId'), serverId: stringField(body, 'serverId'), accountId: stringField(body, 'accountId') })
+        return json(res, 200, { authorizationUrl })
+      }
       case 'attention.clear': {
         const sessionId = stringField(body, 'sessionId') as SessionId
         if (options.attention.profileOf(sessionId) === undefined) return json(res, 404, { error: 'session-not-found' })
@@ -109,19 +119,13 @@ async function handleCallback(req: IncomingMessage, res: ServerResponse, options
   res.setHeader('referrer-policy', 'no-referrer')
   res.setHeader('cache-control', 'no-store')
   try {
-    if (req.method !== 'GET') return redirect(res, '/?companyProfilesOAuth=error')
-    if (options.oauthFinish === undefined) throw new Error('unavailable')
+    if (req.method !== 'GET' || options.oauthFinish === undefined) return redirect(res, '/?companyProfilesOAuth=error')
     const url = requestUrl(req, options.siteOrigin)
-    const binding = {
-      profileId: requiredQuery(url, 'profileId'),
-      serverId: requiredQuery(url, 'serverId'),
-      accountId: requiredQuery(url, 'accountId'),
-      issuer: requiredQuery(url, 'issuer'),
-      redirectUrl: `${options.siteOrigin}${CALLBACK_PATH}`,
-      browserBinding: browserBinding(req),
-    }
-    claim = await options.oauth.claimCallback({ ...binding, state: requiredQuery(url, 'state') })
-    await options.oauthFinish.finishAuth({ ...binding, code: requiredQuery(url, 'code') })
+    const state = requiredQuery(url, 'state')
+    const code = requiredQuery(url, 'code')
+    const claimed = await options.oauth.claimCallbackByState(state)
+    claim = claimed.claim
+    await options.oauthFinish.finishAuth({ ...claimed.binding, code })
     await claim.complete()
     redirect(res, '/?companyProfilesOAuth=complete')
   } catch {

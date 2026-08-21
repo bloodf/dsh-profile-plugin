@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-21
+
+### Fixed
+
+- Added live OAuth account status, connect, callback, and disconnect controls.
+- Completed authoritative client session filtering and selected-profile session creation.
+- Declared the client-safe scope external required by Harness client bundling.
+
 ## [1.0.0] - 2026-08-21
 
 ### Added
@@ -35,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Accessible React profile switcher and settings components (browser bundle).
 - Cordis tool-policy hooks for pre-execute and execute admission.
 
-[Unreleased]: https://github.com/bloodf/dsh-profile-plugin/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/bloodf/dsh-profile-plugin/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/bloodf/dsh-profile-plugin/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bloodf/dsh-profile-plugin/releases/tag/v1.0.0
 [0.1.0]: https://github.com/bloodf/dsh-profile-plugin/releases/tag/v0.1.0
