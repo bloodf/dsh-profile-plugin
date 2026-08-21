@@ -51,13 +51,14 @@ test('reconcile reports error for invalid stdio config', async () => {
   await manager.reconcile(profile, 1)
   assert.equal(errors.length, 1)
   assert.match(errors[0]!, /failed to open/)
+  assert.deepEqual(manager.statuses('default'), [{ serverId: 'bad', status: 'error', message: 'Connection failed' }])
 })
 
-test('finishAuth rejects for unknown connection', async () => {
+test('finishAuth rejects unknown configured server without leaking internals', async () => {
   const manager = new McpManager()
   await assert.rejects(
     manager.finishAuth({ profileId: 'x', serverId: 'y', accountId: 'z', code: 'abc' }),
-    /no connection/,
+    /OAuth server is unavailable/,
   )
 })
 
@@ -67,6 +68,12 @@ test('sanitizeServerName produces valid tool prefix via tools()', async () => {
   const tools = manager.tools('test-profile')
   assert.ok(Array.isArray(tools))
   assert.equal(tools.length, 0)
+})
+
+test('statuses are profile isolated', () => {
+  const manager = new McpManager()
+  assert.deepEqual(manager.statuses('company-a'), [])
+  assert.deepEqual(manager.statuses('company-b'), [])
 })
 
 test('reconcile with disabled MCP capability does not open connection', async () => {

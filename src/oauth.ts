@@ -229,6 +229,21 @@ export class OAuthVault {
     return pending
   }
 
+  /** Ensure provider metadata exists before SDK discovery reads or writes credentials. */
+  async prepare(binding: OAuthBinding): Promise<void> {
+    validateBinding(binding)
+    const key = recordKey(binding)
+    if (this.document.records[key] !== undefined) return
+    await this.change(draft => {
+      if (draft.records[key] !== undefined) return
+      draft.records[key] = {
+        ...binding,
+        ...secretRefs(binding),
+        revokedGeneration: 0,
+      }
+    })
+  }
+
   provider(input: OAuthBinding & {
     metadata: OAuthClientMetadata
     onRedirect: (url: URL) => void | Promise<void>
@@ -315,7 +330,7 @@ function validateBinding(binding: OAuthBinding): void {
   }
   const issuer = new URL(binding.issuer)
   const redirect = new URL(binding.redirectUrl)
-  if (issuer.protocol !== 'https:') throw new TypeError('OAuth issuer must use HTTPS')
+  if (issuer.protocol !== 'https:' && !(issuer.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(issuer.hostname))) throw new TypeError('OAuth issuer must use HTTPS or a loopback HTTP origin')
   if (!['http:', 'https:'].includes(redirect.protocol)) throw new TypeError('OAuth redirect URL must use HTTP(S)')
 }
 

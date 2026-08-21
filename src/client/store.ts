@@ -201,7 +201,7 @@ export class ProfileStore {
     this.applyDocument(doc)
   }
 
-  async save(profileId: string, fields: Record<string, unknown>, capabilities?: ApiCapability[]): Promise<void> {
+  async save(profileId: string, fields?: Record<string, unknown>, capabilities?: ApiCapability[]): Promise<void> {
     const doc = await api.updateProfile(this.state.revision, profileId, fields, this.state.csrfToken, capabilities)
     this.applyDocument(doc)
   }
@@ -226,8 +226,8 @@ export class ProfileStore {
     this.applyAttention(att.entries, att.counts)
   }
 
-  oauthStatus(profileId: string): Promise<api.OAuthStatusResponse> {
-    return api.fetchOAuthStatus(profileId)
+  mcpStatus(profileId: string): Promise<api.McpStatusResponse> {
+    return api.fetchMcpStatus(profileId)
   }
 
   async connectOAuth(profileId: string, serverId: string, accountId = 'default'): Promise<void> {
@@ -237,6 +237,7 @@ export class ProfileStore {
 
   async disconnectOAuth(profileId: string, serverId: string, accountId = 'default'): Promise<void> {
     await api.oauthRevoke(this.state.revision, profileId, serverId, accountId, this.state.csrfToken)
+    await this.refresh()
   }
 
   startPolling(intervalMs = 15_000): void {

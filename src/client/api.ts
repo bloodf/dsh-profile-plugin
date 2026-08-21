@@ -50,15 +50,14 @@ export interface AttentionResponse {
   counts: Record<string, number>
 }
 
-export interface OAuthBindingStatus {
+export interface McpServerStatus {
   serverId: string
-  accountId: string
-  connected: boolean
-  generation: number
+  status: 'connecting' | 'connected' | 'oauth-required' | 'error'
+  message?: string
 }
 
-export interface OAuthStatusResponse {
-  bindings: OAuthBindingStatus[]
+export interface McpStatusResponse {
+  servers: McpServerStatus[]
 }
 
 /** Optimistic-concurrency conflict: `expectedRevision` no longer matches the Host document. */
@@ -107,9 +106,9 @@ export async function fetchAttention(): Promise<AttentionResponse> {
   return fetch(`${API}?view=attention`).then(r => r.json()) as Promise<AttentionResponse>
 }
 
-export async function fetchOAuthStatus(profileId: string): Promise<OAuthStatusResponse> {
-  return fetch(`${API}?view=oauth&profileId=${encodeURIComponent(profileId)}`)
-    .then(r => r.json()) as Promise<OAuthStatusResponse>
+export async function fetchMcpStatus(profileId: string): Promise<McpStatusResponse> {
+  return fetch(`${API}?view=mcp&profileId=${encodeURIComponent(profileId)}`)
+    .then(r => r.json()) as Promise<McpStatusResponse>
 }
 
 export async function createProfile(
@@ -124,7 +123,7 @@ export async function createProfile(
 export async function updateProfile(
   expectedRevision: number,
   profileId: string,
-  fields: Record<string, unknown>,
+  fields: Record<string, unknown> | undefined,
   csrfToken: string,
   capabilities?: ApiCapability[],
 ): Promise<ApiDocument> {

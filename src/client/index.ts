@@ -2,7 +2,7 @@
  * Client plugin entry: registers profile UI into harness slots.
  *
  * - sidebar.footer.action  → ProfileSwitcher (compact dropdown)
- * - settings.section       → Profiles CRUD/editor/capabilities/OAuth
+ * - settings.section       → Profiles CRUD and URL-only MCP server setup
  * - shell.overlay          → Attention toast with sound + click navigation
  *
  * Uses React.createElement at the slot boundary (TSX in components).

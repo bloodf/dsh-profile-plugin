@@ -91,7 +91,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       oauth,
       attention,
       siteOrigin,
-      oauthFinish: manager,
+      mcp: manager,
     }), 'company-profiles: HTTP API and OAuth callback')
   }
 }

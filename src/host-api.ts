@@ -13,14 +13,10 @@ const API_PATH = '/company-profiles/api'
 const CALLBACK_PATH = '/company-profiles/oauth/callback'
 const MAX_BODY_BYTES = 256 * 1024
 
-export interface OAuthFinishManager {
-  finishAuth(input: {
-    profileId: string
-    serverId: string
-    accountId: string
-    code: string
-  }): Promise<void>
-  beginAuth?(input: { profileId: string; serverId: string; accountId: string }): Promise<string>
+export interface McpStatusManager {
+  statuses(profileId: string): readonly { serverId: string; status: 'connecting' | 'connected' | 'oauth-required' | 'error'; message?: string }[]
+  finishAuth(input: { profileId: string; serverId: string; accountId: string; code: string }): Promise<void>
+  beginAuth(input: { profileId: string; serverId: string; accountId: string }): Promise<string>
 }
 
 export interface HostApiOptions {
@@ -28,7 +24,7 @@ export interface HostApiOptions {
   oauth: OAuthVault
   attention: ProfileAttention
   siteOrigin: string
-  oauthFinish?: OAuthFinishManager
+  mcp?: McpStatusManager
 }
 
 interface RegisteredHostApiOptions extends HostApiOptions {
@@ -49,6 +45,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, options: Reg
       const url = requestUrl(req, options.siteOrigin)
       if (url.searchParams.get('view') === 'attention') return json(res, 200, { entries: options.attention.list(), counts: options.attention.counts() })
       if (url.searchParams.get('view') === 'oauth') return json(res, 200, { bindings: await options.oauth.status(requiredQuery(url, 'profileId')) })
+      if (url.searchParams.get('view') === 'mcp') return json(res, 200, { servers: options.mcp?.statuses(requiredQuery(url, 'profileId')) ?? [] })
       return json(res, 200, profileView(options.registry.snapshot(), options.registry, options.csrfToken))
     }
     if (req.method !== 'POST') return json(res, 405, { error: 'method-not-allowed' })
@@ -87,8 +84,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, options: Reg
         await options.oauth.revokeAccount({ profileId: stringField(body, 'profileId'), serverId: stringField(body, 'serverId'), accountId: stringField(body, 'accountId') })
         return json(res, 200, { ok: true })
       case 'oauth-begin': {
-        if (options.oauthFinish?.beginAuth === undefined) return json(res, 503, { error: 'oauth-unavailable' })
-        const authorizationUrl = await options.oauthFinish.beginAuth({ profileId: stringField(body, 'profileId'), serverId: stringField(body, 'serverId'), accountId: stringField(body, 'accountId') })
+        if (options.mcp === undefined) return json(res, 503, { error: 'oauth-unavailable' })
+        const authorizationUrl = await options.mcp.beginAuth({ profileId: stringField(body, 'profileId'), serverId: stringField(body, 'serverId'), accountId: stringField(body, 'accountId') })
         return json(res, 200, { authorizationUrl })
       }
       case 'attention.clear': {
@@ -119,13 +116,13 @@ async function handleCallback(req: IncomingMessage, res: ServerResponse, options
   res.setHeader('referrer-policy', 'no-referrer')
   res.setHeader('cache-control', 'no-store')
   try {
-    if (req.method !== 'GET' || options.oauthFinish === undefined) return redirect(res, '/?companyProfilesOAuth=error')
+    if (req.method !== 'GET' || options.mcp === undefined) return redirect(res, '/?companyProfilesOAuth=error')
     const url = requestUrl(req, options.siteOrigin)
     const state = requiredQuery(url, 'state')
     const code = requiredQuery(url, 'code')
     const claimed = await options.oauth.claimCallbackByState(state)
     claim = claimed.claim
-    await options.oauthFinish.finishAuth({ ...claimed.binding, code })
+    await options.mcp.finishAuth({ ...claimed.binding, code })
     await claim.complete()
     redirect(res, '/?companyProfilesOAuth=complete')
   } catch {

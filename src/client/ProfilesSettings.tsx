@@ -1,4 +1,4 @@
-/** Settings section: profile CRUD, editor, capability matrix, OAuth connections, validation. */
+/** Native profile editor with URL-only MCP setup and automatic OAuth discovery. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { ProfileStore, ProfileView } from './store.ts'
 import type { ApiCapability } from './api.ts'
@@ -116,7 +116,7 @@ function ProfileRow({ profile, store, isDefault }: { profile: ProfileView; store
   )
 }
 
-// ── Profile editor with capability matrix ────────────────────────────────
+// ── Profile editor ───────────────────────────────────────────────────────
 function ProfileEditor({ profile, store }: { profile: ProfileView; store: ProfileStore }): React.ReactNode {
   const [fields, setFields] = useState({
     displayName: profile.profile.fields.displayName ?? '',
@@ -126,82 +126,80 @@ function ProfileEditor({ profile, store }: { profile: ProfileView; store: Profil
     color: profile.color,
     avatarSeed: profile.avatarSeed,
   })
-  const [capabilities, setCapabilities] = useState<ApiCapability[]>(
-    profile.profile.localOverrides?.length ? [...profile.profile.localOverrides] : [...profile.profile.capabilities],
-  )
+  const [capabilities, setCapabilities] = useState<ApiCapability[]>([...profile.profile.localOverrides])
+  const [statuses, setStatuses] = useState<Record<string, import('./api.ts').McpServerStatus>>({})
+  const [draft, setDraft] = useState<{ originalKey?: string; name: string; url: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
-  const [oauthStatuses, setOauthStatuses] = useState<Record<string, boolean>>({})
 
-  useEffect(() => {
-    void store.oauthStatus(profile.id).then(result => {
-      setOauthStatuses(Object.fromEntries(result.bindings.map(binding => [`${binding.serverId}/${binding.accountId}`, binding.connected])))
-    }).catch(() => { setOauthStatuses({}) })
+  const refreshStatuses = useCallback(() => {
+    void store.mcpStatus(profile.id).then(result => {
+      setStatuses(Object.fromEntries(result.servers.map(server => [server.serverId, server])))
+    }).catch(() => {})
   }, [profile.id, store])
 
-  const validate = useCallback((): boolean => {
-    if (!fields.displayName.trim()) {
-      setValidationError('Display name is required')
-      return false
-    }
-    if (fields.website && !/^https?:\/\/.+/.test(fields.website)) {
-      setValidationError('Website must start with http:// or https://')
-      return false
-    }
-    // Validate MCP capabilities
-    for (const cap of capabilities) {
-      if (cap.kind === 'mcp' && cap.state === 'enabled') {
-        const config = cap.config as Record<string, unknown> | undefined
-        if (!config?.transport) {
-          setValidationError(`MCP capability "${cap.key}" requires a transport type`)
-          return false
-        }
-        if (config.transport === 'stdio' && !config.command) {
-          setValidationError(`MCP capability "${cap.key}" (stdio) requires a command`)
-          return false
-        }
-        if (config.transport === 'streamable-http' && !config.url) {
-          setValidationError(`MCP capability "${cap.key}" (streamable-http) requires a URL`)
-          return false
-        }
-      }
-    }
-    setValidationError(null)
-    return true
-  }, [fields, capabilities])
+  useEffect(() => {
+    refreshStatuses()
+    const timer = window.setInterval(refreshStatuses, 2_000)
+    return () => window.clearInterval(timer)
+  }, [refreshStatuses])
 
   const handleSave = useCallback(async () => {
-    if (!validate()) return
+    if (!fields.displayName.trim()) return setValidationError('Display name is required')
+    if (fields.website && !/^https?:\/\/.+/.test(fields.website)) return setValidationError('Website must start with http:// or https://')
     setSaving(true)
     try {
       await store.save(profile.id, fields, capabilities)
       store.setEditing(null)
-    } catch (err) {
-      setValidationError(err instanceof Error ? err.message : String(err))
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
     }
-  }, [fields, capabilities, profile.id, store, validate])
+  }, [fields, capabilities, profile.id, store])
 
-  const toggleCapability = useCallback((index: number) => {
-    setCapabilities(prev => {
-      const next = [...prev]
-      const cap = next[index]!
-      next[index] = { ...cap, state: cap.state === 'enabled' ? 'disabled' : 'enabled' }
-      return next
-    })
-  }, [])
+  const saveServer = useCallback(async () => {
+    if (draft === null) return
+    const name = draft.name.trim()
+    if (!name) return setValidationError('Server name is required')
+    let url: URL
+    try { url = new URL(draft.url) } catch { return setValidationError('Server URL must start with http:// or https://') }
+    if (!['http:', 'https:'].includes(url.protocol)) return setValidationError('Server URL must start with http:// or https://')
+    if (capabilities.some(capability => capability.kind === 'mcp' && capability.key === name && capability.key !== draft.originalKey)) return setValidationError(`MCP server "${name}" already exists`)
+    const next = capabilities.filter(capability => capability.kind !== 'mcp' || capability.key !== draft.originalKey)
+    next.push({ kind: 'mcp', key: name, state: 'enabled', config: { transport: 'streamable-http', serverName: name, url: url.toString() } })
+    setSaving(true)
+    try {
+      await store.save(profile.id, undefined, next)
+      setCapabilities(next)
+      setDraft(null)
+      setValidationError(null)
+      window.setTimeout(refreshStatuses, 250)
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }, [capabilities, draft, profile.id, refreshStatuses, store])
 
-  const addCapability = useCallback(() => {
-    setCapabilities(prev => [
-      ...prev,
-      { kind: 'mcp', key: `mcp-${Date.now()}`, state: 'enabled', config: { transport: 'stdio', serverName: '', command: '' } },
-    ])
-  }, [])
+  const removeServer = useCallback(async (capability: ApiCapability) => {
+    const withoutLocal = capabilities.filter(item => item.kind !== 'mcp' || item.key !== capability.key)
+    const next = profile.parentId === null
+      ? withoutLocal
+      : [...withoutLocal, { kind: 'mcp' as const, key: capability.key, state: 'disabled' as const }]
+    setSaving(true)
+    try {
+      await store.save(profile.id, undefined, next)
+      setCapabilities(next)
+      setValidationError(null)
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }, [capabilities, profile.id, profile.parentId, store])
 
-  const removeCapability = useCallback((index: number) => {
-    setCapabilities(prev => prev.filter((_, i) => i !== index))
-  }, [])
+  const effectiveMcp = profile.profile.capabilities.filter(capability => capability.kind === 'mcp' && capability.state === 'enabled')
 
   return (
     <section aria-label={`Edit ${profile.name}`} className={styles.section}>
@@ -209,139 +207,60 @@ function ProfileEditor({ profile, store }: { profile: ProfileView; store: Profil
         <h2 className={styles.heading}>Edit: {profile.name}</h2>
         <button type="button" className={styles.btn} onClick={() => store.setEditing(null)}>← Back</button>
       </div>
+      {validationError && <div role="alert" className={styles.alert}>{validationError}</div>}
 
-      {validationError && (
-        <div role="alert" className={styles.alert}>
-          {validationError}
-        </div>
-      )}
-
-      {/* Fields */}
       <fieldset className={styles.fieldset}>
         <legend className={styles.legend}>Profile Fields</legend>
         <div className={styles.fieldGrid}>
-          <div>
-            <label className={styles.label}>Display Name *
-              <input className={styles.field} value={fields.displayName} onChange={e => setFields(f => ({ ...f, displayName: e.target.value }))} required />
-            </label>
-          </div>
-          <div>
-            <label className={styles.label}>Legal Name
-              <input className={styles.field} value={fields.legalName} onChange={e => setFields(f => ({ ...f, legalName: e.target.value }))} />
-            </label>
-          </div>
-          <div className={styles.fieldFull}>
-            <label className={styles.label}>Description
-              <textarea className={styles.textarea} value={fields.description} onChange={e => setFields(f => ({ ...f, description: e.target.value }))} />
-            </label>
-          </div>
-          <div>
-            <label className={styles.label}>Website
-              <input className={styles.field} type="url" value={fields.website} onChange={e => setFields(f => ({ ...f, website: e.target.value }))} placeholder="https://" />
-            </label>
-          </div>
-          <div>
-            <label className={styles.label}>Color
-              <div className={styles.colorRow}>
-                <input type="color" value={fields.color} onChange={e => setFields(f => ({ ...f, color: e.target.value }))} className={styles.colorSwatch} />
-                <input className={styles.colorField} value={fields.color} onChange={e => setFields(f => ({ ...f, color: e.target.value }))} pattern="#[0-9a-fA-F]{6}" />
-              </div>
-            </label>
-          </div>
+          <label className={styles.label}>Display Name *<input className={styles.field} value={fields.displayName} onChange={event => setFields(value => ({ ...value, displayName: event.target.value }))} required /></label>
+          <label className={styles.label}>Legal Name<input className={styles.field} value={fields.legalName} onChange={event => setFields(value => ({ ...value, legalName: event.target.value }))} /></label>
+          <label className={`${styles.label} ${styles.fieldFull}`}>Description<textarea className={styles.textarea} value={fields.description} onChange={event => setFields(value => ({ ...value, description: event.target.value }))} /></label>
+          <label className={styles.label}>Website<input className={styles.field} type="url" value={fields.website} onChange={event => setFields(value => ({ ...value, website: event.target.value }))} placeholder="https://" /></label>
+          <label className={styles.label}>Color<span className={styles.colorRow}><input type="color" value={fields.color} onChange={event => setFields(value => ({ ...value, color: event.target.value }))} className={styles.colorSwatch} /><input className={styles.colorField} value={fields.color} onChange={event => setFields(value => ({ ...value, color: event.target.value }))} pattern="#[0-9a-fA-F]{6}" /></span></label>
         </div>
       </fieldset>
 
-      {/* Capability matrix */}
       <fieldset className={styles.fieldset}>
-        <legend className={styles.legend}>Capability Matrix</legend>
-        {capabilities.length === 0 && (
-          <div className={styles.emptyNote}>
-            No capabilities configured. Inherits all from parent profile.
-          </div>
-        )}
-        <table className={styles.table} role="grid" aria-label="Capabilities">
-          <thead>
-            <tr className={styles.tableHeadRow}>
-              <th className={styles.th}>Type</th>
-              <th className={styles.th}>Key</th>
-              <th className={styles.thCenter}>State</th>
-              <th className={styles.thRight}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {capabilities.map((cap, i) => (
-              <CapabilityRow key={i} cap={cap} index={i} onToggle={toggleCapability} onRemove={removeCapability} />
-            ))}
-          </tbody>
-        </table>
-        <button type="button" className={`${styles.btn} ${styles.mt8}`} onClick={addCapability}>
-          + Add Capability
-        </button>
-      </fieldset>
-
-      <fieldset className={styles.fieldset}>
-        <legend className={styles.legend}>OAuth Connections</legend>
-        {capabilities.filter(capability => capability.kind === 'mcp' && capability.state === 'enabled' && (capability.config as Record<string, unknown>)?.oauth).length === 0
-          ? <div className={styles.emptyNote}>No OAuth-enabled MCP servers.</div>
-          : capabilities
-            .filter(capability => capability.kind === 'mcp' && capability.state === 'enabled' && (capability.config as Record<string, unknown>)?.oauth)
-            .map((capability) => {
-              const serverId = ((capability.config as Record<string, unknown>)?.serverName as string) || capability.key
-              const connected = oauthStatuses[`${serverId}/default`] === true
-              return <div key={capability.key} className={styles.oauthRow}>
-                <span className={connected ? styles.badgeSuccess : styles.badge}>{connected ? 'Connected' : 'Not connected'}</span>
-                <span>{capability.key}</span>
-                <span className={styles.oauthServer}>({serverId})</span>
-                <button type="button" className={styles.btnSmall} onClick={() => { void (connected ? store.disconnectOAuth(profile.id, serverId) : store.connectOAuth(profile.id, serverId)) }}>{connected ? 'Disconnect' : 'Connect'}</button>
+        <legend className={styles.legend}>MCP Servers</legend>
+        <p className={styles.sectionHint}>Add a server URL. Authentication is detected automatically.</p>
+        {effectiveMcp.length === 0 && draft === null && <div className={styles.emptyNote}>No MCP servers configured.</div>}
+        <ul className={styles.mcpList}>
+          {effectiveMcp.map(capability => {
+            const config = capability.config as { url?: string; serverName?: string } | undefined
+            const serverId = config?.serverName ?? capability.key
+            const status = statuses[serverId]
+            return <li key={capability.key} className={styles.mcpRow}>
+              <div className={styles.mcpBody}>
+                <div className={styles.mcpTitle}><strong>{capability.key}</strong><McpStatus status={status?.status} /></div>
+                <div className={styles.mcpUrl}>{config?.url ?? 'Local stdio server'}</div>
               </div>
-            })}
+              <div className={styles.rowActions}>
+                {status?.status === 'oauth-required' && <button type="button" className={styles.btnPrimary} onClick={() => { void store.connectOAuth(profile.id, serverId) }} aria-label={`Connect ${capability.key}; opens authorization page`}>Connect</button>}
+                {config?.url && <button type="button" className={styles.btn} onClick={() => setDraft({ originalKey: capability.key, name: capability.key, url: config.url! })}>Edit</button>}
+                <button type="button" className={styles.btnDanger} onClick={() => { void removeServer(capability) }}>Remove</button>
+              </div>
+            </li>
+          })}
+          {draft !== null && <li className={styles.mcpForm}>
+            <label className={styles.label}>Server name<input autoFocus className={styles.field} value={draft.name} onChange={event => setDraft(value => value && ({ ...value, name: event.target.value }))} placeholder="e.g. Jira" /></label>
+            <label className={styles.label}>Server URL<input className={styles.field} type="url" value={draft.url} onChange={event => setDraft(value => value && ({ ...value, url: event.target.value }))} placeholder="https://mcp.example.com" /></label>
+            <div className={styles.formActions}><button type="button" className={styles.btn} onClick={() => setDraft(null)}>Cancel</button><button type="button" className={styles.btnPrimary} disabled={saving} onClick={() => { void saveServer() }}>{saving ? 'Saving…' : 'Save server'}</button></div>
+          </li>}
+        </ul>
+        {draft === null && <button type="button" className={styles.btn} onClick={() => setDraft({ name: '', url: '' })}>+ Add MCP Server</button>}
       </fieldset>
 
-      {/* Actions */}
       <div className={styles.actions}>
         <button type="button" className={styles.btn} onClick={() => store.setEditing(null)}>Cancel</button>
-        <button
-          type="button"
-          className={styles.btnPrimary}
-          onClick={() => { void handleSave() }}
-          disabled={saving}
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+        <button type="button" className={styles.btnPrimary} onClick={() => { void handleSave() }} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
       </div>
     </section>
   )
 }
 
-// ── Capability row ──────────────────────────────────────────────────────
-function CapabilityRow({ cap, index, onToggle, onRemove }: {
-  cap: ApiCapability; index: number
-  onToggle: (i: number) => void; onRemove: (i: number) => void
-}): React.ReactNode {
-  const stateClass = cap.source === 'inherited' ? styles.stateInherited : cap.state === 'enabled' ? styles.stateEnabled : styles.stateDisabled
-  return (
-    <tr className={styles.tableRow}>
-      <td className={styles.td}>
-        <span className={styles.badge}>{cap.kind}</span>
-      </td>
-      <td className={styles.tdMono}>{cap.key}</td>
-      <td className={styles.tdCenter}>
-        <button
-          type="button"
-          className={stateClass}
-          onClick={() => onToggle(index)}
-          aria-label={`Toggle ${cap.key} ${cap.state === 'enabled' ? 'off' : 'on'}`}
-        >
-          {cap.source === 'inherited' ? 'Inherited' : cap.state === 'enabled' ? 'Enabled locally' : 'Disabled locally'}
-        </button>
-      </td>
-      <td className={styles.tdRight}>
-        <button type="button" className={styles.btnDangerSmall} onClick={() => onRemove(index)} aria-label={`Remove ${cap.key}`}>
-          ✕
-        </button>
-      </td>
-    </tr>
-  )
+function McpStatus({ status }: { status: import('./api.ts').McpServerStatus['status'] | undefined }): React.ReactNode {
+  const label = status === 'connected' ? 'Connected' : status === 'oauth-required' ? 'Authorization required' : status === 'error' ? 'Connection failed' : 'Connecting…'
+  return <span className={status === 'connected' ? styles.badgeSuccess : status === 'error' ? styles.badgeAttention : styles.badge}>{label}</span>
 }
 
 // ── Sync external store hook ────────────────────────────────────────────

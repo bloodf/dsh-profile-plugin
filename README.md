@@ -172,29 +172,25 @@ The plugin is configured through `cordis.patch.yml`:
 
 The JSON file is created automatically on first use with a single default profile.
 
-## OAuth Setup
+## MCP and OAuth Setup
 
-OAuth credentials are scoped per `(profileId, serverId, accountId)` triple.
+Open **Settings → Profiles**, edit a profile, then select **Add MCP Server**. Enter:
 
-1. **Register your OAuth application** with the target provider (e.g., GitHub, Google).
-2. **Set the callback URL** to `http://localhost:<port>/company-profiles/oauth/callback`.
-3. **Store client credentials** through the Harness `CredentialProvider`.
-4. **Begin an OAuth flow** via the Host API:
+1. A human-readable server name.
+2. The MCP Streamable HTTP URL.
+3. **Save server**.
 
-```json
-POST /company-profiles/api
-{
-  "action": "oauth-begin",
-  "profileId": "my-company",
-  "serverId": "github",
-  "accountId": "org-main",
-  "issuer": "https://github.com",
-  "redirectUrl": "http://localhost:3080/company-profiles/oauth/callback",
-  "browserBinding": "<browser-session-id>"
-}
+The plugin attempts the MCP connection immediately. Public servers become **Connected**. If the server returns an OAuth challenge, the row becomes **Authorization required** and shows **Connect**. Selecting **Connect** runs the server-discovered OAuth flow and returns to Harness after authorization.
+
+No OAuth issuer, client ID, token, or manual OAuth toggle belongs in profile configuration. OAuth discovery follows MCP protected-resource metadata, and credentials remain scoped to `(profileId, serverId, accountId)` through Harness `CredentialProvider`.
+
+OAuth callback URL:
+
+```text
+http://localhost:<port>/company-profiles/oauth/callback
 ```
 
-The vault handles PKCE challenge generation, state parameter creation, timing-safe callback verification, and token persistence automatically.
+The vault handles PKCE challenge generation, state creation, callback verification, token persistence, and revocation automatically.
 
 ## Usage
 

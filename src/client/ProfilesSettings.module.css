@@ -243,99 +243,74 @@
   flex: 1;
 }
 
-.emptyNote {
+.emptyNote,
+.sectionHint {
   font-size: 13px;
   color: var(--dsw-alias-label-tertiary);
-  margin-bottom: 8px;
+  margin: 0 0 8px;
 }
 
-.mt8 {
-  margin-top: 8px;
+.mcpList {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
-/* ── Capability table ────────────────────────────────────────────────── */
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  color: var(--dsw-alias-label-primary);
-}
-
-.tableHeadRow {
-  border-bottom: 2px solid var(--dsw-alias-border-l2);
-}
-
-.th {
-  text-align: left;
-  padding: 4px 8px;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.thCenter {
-  composes: th;
-  text-align: center;
-}
-
-.thRight {
-  composes: th;
-  text-align: right;
-}
-
-.tableRow {
+.mcpRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
-.td {
-  padding: 4px 8px;
+.mcpBody {
+  flex: 1;
+  min-width: 0;
 }
 
-.tdCenter {
-  composes: td;
-  text-align: center;
-}
-
-.tdRight {
-  composes: td;
-  text-align: right;
-}
-
-.tdMono {
-  composes: td;
-  font-family: monospace;
-  font-size: 12px;
-}
-
-.stateInherited {
-  composes: btnSmall;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.stateEnabled {
-  composes: btnSmall;
-  color: var(--dsw-alias-brand-primary);
-  border-color: var(--dsw-alias-brand-primary);
-}
-
-.stateDisabled {
-  composes: btnSmall;
-  color: var(--dsw-alias-state-error-primary);
-  border-color: var(--dsw-alias-state-error-primary);
-}
-
-/* ── OAuth connections ───────────────────────────────────────────────── */
-
-.oauthRow {
+.mcpTitle {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
-  font-size: 13px;
   color: var(--dsw-alias-label-primary);
+  font-size: 13px;
 }
 
-.oauthServer {
+.mcpUrl {
+  margin-top: 2px;
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
+  font-family: monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcpForm {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto;
+  align-items: end;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.formActions {
+  display: flex;
+  gap: 4px;
+}
+
+@media (max-width: 620px) {
+  .mcpRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mcpForm {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Footer actions ──────────────────────────────────────────────────── */
