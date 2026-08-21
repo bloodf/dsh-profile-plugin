@@ -11,9 +11,10 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "types": ["node"],
+    "jsx": "react-jsx",
     "lib": ["ES2022", "DOM"],
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["tests"]
 }

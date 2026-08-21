@@ -2,6 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ToolDispatchExecution, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import type { CompanyProfileRegistry } from './registry.js'
+import { DEFAULT_PROFILE_ID } from './model.js'
 import { ProfileRuntime, type SnapshotLease } from './runtime.js'
 
 export interface DiscoveredToolsProvider {
@@ -11,6 +12,16 @@ export interface DiscoveredToolsProvider {
 export interface HostRuntimeController {
   readonly runtime: ProfileRuntime
   reconcile(): void
+}
+
+/**
+ * Resolve authoritative profile id from execution context.
+ * Uses `exec.agent.session.header.profileId` when present,
+ * falls back to `'default'` for legacy sessions without profile identity.
+ */
+function resolveProfileId(exec: ToolExecution): string {
+  const header = exec.agent?.session.header as { profileId?: string } | undefined
+  return header?.profileId ?? DEFAULT_PROFILE_ID
 }
 
 export function installHostRuntime(
@@ -32,8 +43,7 @@ export function installHostRuntime(
   ctx.effect(() => registry.subscribe(() => { reconcile() }), 'company-profiles: reconcile generations')
 
   ctx.on('tools/pre-execute', async (exec, next) => {
-    const profileId = exec.agent?.session.header.profileId
-    if (profileId === undefined) return { kind: 'deny', reason: 'company profile identity required' }
+    const profileId = resolveProfileId(exec)
     // Capture once. Final execute enforcement consumes this exact generation.
     if (!executions.has(exec)) {
       try { executions.set(exec, runtime.admit(profileId, exec.name)) }
@@ -44,8 +54,8 @@ export function installHostRuntime(
 
   ctx.on('tools/execute', async (exec: ToolDispatchExecution, next): Promise<ToolExecutionResult> => {
     const lease = executions.get(exec)
-    const profileId = exec.agent?.session.header.profileId
-    if (lease === undefined || profileId === undefined || lease.snapshot.profileId !== profileId
+    const profileId = resolveProfileId(exec)
+    if (lease === undefined || lease.snapshot.profileId !== profileId
       || !lease.snapshot.allowedTools.has(exec.name)) {
       return denied(`tool '${exec.name}' has no admitted company profile generation`)
     }

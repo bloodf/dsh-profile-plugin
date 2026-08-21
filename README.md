@@ -74,6 +74,7 @@ Profiles persist to a standalone JSON file outside the Harness installation dire
 | `host-runtime` | `installHostRuntime()` | Cordis event hooks for `tools/pre-execute` and `tools/execute` |
 | `host-api` | `registerHostRoutes()` | Same-origin JSON Host API and OAuth callback HTTP handler |
 | `attention` | `ProfileAttention` | Session event observer → per-profile attention aggregation |
+| `mcp-manager` | `McpManager` | Live MCP connections (stdio/streamable-http), one per profile/server/generation |
 | `client` | `ProfileSwitcher`, `ProfilesSettings` | React components for browser UI (no JSX, plain `createElement`) |
 
 ## Security Model
@@ -104,10 +105,8 @@ Harness does not yet expose first-class `ProfileId` session/RPC seams. Until tha
 
 - Browser components are exported but **not registered** into Settings/sidebar slots.
 - Session lists are **not filtered** by profile.
-- MCP connections are **not auto-mounted** per profile.
-- OAuth callback HTTP route is **not installed** by default.
 
-These are intentionally deferred: enabling them before authoritative session profile identity exists would create cross-company data leakage risk. Model/provider selection remains global by design.
+Profile identity falls back to `'default'` for legacy sessions without `header.profileId`. Model/provider selection remains global by design.
 
 ## Installation
 
@@ -336,11 +335,13 @@ dsh-profile-plugin/
 │   ├── host-runtime.ts   # Cordis tool-policy event hooks
 │   ├── host-api.ts       # HTTP API and OAuth callback routes
 │   ├── attention.ts      # Session attention aggregation
+│   ├── mcp-manager.ts    # Live MCP connections (stdio + streamable-http)
 │   └── client.ts         # React browser components
 ├── tests/
 │   ├── registry.test.ts  # Registry CRUD and concurrency tests
 │   ├── oauth.test.ts     # OAuth flow and credential tests
-│   └── capabilities.test.ts  # Capability inheritance and admission tests
+│   ├── capabilities.test.ts  # Capability inheritance and admission tests
+│   └── mcp-manager.test.ts   # MCP manager connection lifecycle tests
 ├── cordis.patch.yml      # Harness plugin row declaration
 ├── package.json
 └── tsconfig.json
